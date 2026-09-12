@@ -32,7 +32,17 @@ Verified on physical AI Passport, a macOS collector and an Android 15 phone:
 
 Validation performed on 2026-09-12. These are local hardware results, not a latency or range guarantee.
 A unit test cannot certify an ADC switch, RF range, a cellular VPN route or battery endurance.
-Manual UP/DOWN/OK testing and off-LAN WireGuard testing are pending user availability.
+The user has verified physical UP/DOWN window switching and short OK acknowledgement;
+the matching physical OK read receipt was also observed over USB.
+The user has verified wake-only first OK press after the 60-second screen idle: the screen woke
+and the unread indicator remained unchanged; no read receipt was generated.
+The user has verified physical long OK reconnection: synchronization resumed without asking
+for another pairing code. Wireless ADB was unavailable for that gesture, so the gesture result
+is a user-observed hardware check. After wireless ADB was restored, a fresh device ACK was
+confirmed through the phone and the pending notification queue had drained to zero.
+Earlier automated interruption/replay results are separate.
+Off-LAN WireGuard testing was explicitly excluded from this release acceptance by the user;
+it has not been physically verified. LAN delivery does not certify a particular VPN setup.
 There is no measured battery-current or endurance claim.
 
 ## Reproduce

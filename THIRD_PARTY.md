@@ -14,6 +14,7 @@ Dependencies are fetched separately and retain their own licenses.
 | [pySerial](https://github.com/pyserial/pyserial) | Optional USB diagnostics | BSD-3-Clause |
 
 Transitive dependencies and exact ESP component hashes are recorded in the dependency locks.
+Full bundled-runtime notices are included in [THIRD_PARTY_NOTICES.txt](docs/THIRD_PARTY_NOTICES.txt).
 Distributors of built firmware/APKs must retain applicable third-party notices.
 The studied [Codex Usage AI Passport](https://github.com/zt20/codex-usage-ai-passport) application
 is a reference only: its implementation is not included or copied.
