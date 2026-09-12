@@ -38,6 +38,8 @@ Requires Python 3.10+ and a working, logged-in Codex CLI. Install [uv](https://d
 uvx --from 'codex-passport-sync==0.1.1' codex-passport --help
 ```
 
+If your configured mirror has not synchronized this new package, add `--index https://pypi.org/simple` to the uvx or uv tool install command to prioritize official PyPI.
+
 For persistent hooks, install a persistent tool environment instead:
 
 ```sh

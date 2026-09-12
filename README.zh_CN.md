@@ -49,6 +49,8 @@ Python 0.1.1 与已有 APK/固件兼容，本次无需重新安装设备端。�
 uvx --from 'codex-passport-sync==0.1.1' codex-passport --help
 ```
 
+若自定义镜像提示找不到新包，在 `uvx` 后加 `--index https://pypi.org/simple`，优先从官方 PyPI 安装；无须修改全局镜像设置。
+
 日常 Hooks 和自启动需要持久环境，按 [Python 安装指南](docs/PYTHON.md) 或从零指南安装，不要把长期 Hooks 绑定到临时 uvx 缓存。
 
 ## 日常使用

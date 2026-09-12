@@ -22,6 +22,14 @@ export COMPUTER_LAN_IP="替换为电脑的局域网 IPv4 地址"
 uvx --from 'codex-passport-sync[ble]==0.1.1' codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765
 ```
 
+如果提示 `was not found in the package registry`，而 PyPI 项目页已经有该版本，可能是你配置的镜像尚未同步新包。
+临时优先使用官方索引即可，不必修改全局配置：
+
+```sh
+uvx --refresh --index https://pypi.org/simple --from 'codex-passport-sync==0.1.1' codex-passport --help
+uv tool install --index https://pypi.org/simple 'codex-passport-sync[ble]==0.1.1'
+```
+
 按 `Ctrl+C` 停止。默认状态目录是 `~/.local/state/codex-passport`，首次启动 `serve` 后在该目录生成 `relay-token`。
 本例没有安装 Hooks；日志兼容采集可运行，但要稳定接收 Hooks 事件，请使用下一种持久安装方式。
 
