@@ -216,7 +216,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(text("首次连接",18,color(R.color.on_surface),true));gap(content,8);
         content.addView(text("将两台设备放在一起，在手机系统弹窗输入 Passport 屏幕上的六位配对码。",14,color(R.color.on_variant),false));gap(content,20);
         content.addView(text("Passport 图例",18,color(R.color.on_surface),true));gap(content,8);
-        content.addView(text("外环：剩余额度 · 内环：剩余时间\n橙色：用得偏快 · 绿色：均衡 · 蓝色：偏慢\n▶ 进行中 · △ 待回复 · 铃铛：未读\n上/下键切换周期，OK 标为已读。\n熄屏后首次按键只唤醒；长按 OK 重连蓝牙。",14,color(R.color.on_variant),false));gap(content,20);
+        content.addView(text("外环：剩余额度 · 内环：剩余时间\n橙色：用得偏快 · 绿色：均衡 · 蓝色：偏慢\n▶ 进行中 · △ 待回复 · 铃铛：未读\n短按上/下切页，长按上/下切周期。\nOK 标为已读；进展页显示最近三个会话。\n熄屏后首次按键只唤醒；长按 OK 重连蓝牙。",14,color(R.color.on_variant),false));gap(content,20);
         content.addView(text("后台接收",18,color(R.color.on_surface),true));gap(content,8);
         content.addView(text("持续同步时，系统会显示一条常驻通知。若手机限制后台运行，可在应用电池设置中允许后台活动。",14,color(R.color.on_variant),false));
     }

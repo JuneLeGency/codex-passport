@@ -59,3 +59,21 @@ java -cp /tmp/passport-pace UsagePaceTest
 Run HTTP tests where local sockets are permitted. Hardware verification requires the matching
 Passport firmware, Android configuration and explicit BLE pairing. Never publish raw device
 flash dumps, relay databases, access tokens, private transcripts or personal screenshots.
+
+## 0.2.0 progress pages
+
+- The original large dashboard and the compact quota/three-session page were both captured from
+  the physical device using synthetic data. The public images contain no real conversation data.
+- The user verified short UP/DOWN page switching, held UP/DOWN quota-window switching, and
+  wake-only first press. Short OK acknowledgement and held OK reconnection retain their behavior.
+- 22 Python tests cover the new three-session bound, current status after a new turn, removal of
+  the previous turn's completion summary, escaped UTF-8 payload limits, and existing transport tests.
+- Both firmware pages build with strict warnings. The 16 px OFL CJK bitmap uses large font indices;
+  the app fits the factory partition. No bootloader, partition table or pairing storage was replaced.
+- Progress changes do not change the selected page and do not create new alerts for quiet starts.
+  There are no conversation actions, detail menus, automatic scrolling or fabricated percentages.
+- The device receives bounded titles and summaries over encrypted BLE in this version. The phone
+  retains its separate notification inbox. Unsupported device glyphs are omitted instead of boxes.
+- Four real-device transitions (computer → phone → computer → phone) again delivered matching
+  device event receipts with the new progress payload. The initial computer delivery waited behind
+  an existing queue; this is not a latency benchmark. The final route was restored to phone forwarding.

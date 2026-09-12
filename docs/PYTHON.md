@@ -1,7 +1,7 @@
 # Python 包：安装、uvx 和更新
 
 Python 包名是 **`codex-passport-sync`**，安装后执行的命令叫 **`codex-passport`**。
-Python 3.10+；电脑 BLE 直连需要 `[ble]` 可选依赖。Python 中继 0.1.1 与 APK/固件 0.1.0 配套使用，设备端不需要为本次文档与打包更新重新安装。
+Python 3.10+；电脑 BLE 直连需要 `[ble]` 可选依赖。Python 中继 0.2.0 与 APK/固件 0.2.0 配套使用。升级三会话进展页时需同时更新这三个组件，保留状态目录和绑定。
 
 [PyPI 项目页](https://pypi.org/project/codex-passport-sync/) · [GitHub Releases](https://github.com/JuneLeGency/codex-passport/releases)
 
@@ -12,22 +12,22 @@ Python 3.10+；电脑 BLE 直连需要 `[ble]` 可选依赖。Python 中继 0.1.
 安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 后：
 
 ```sh
-uvx --from 'codex-passport-sync==0.1.1' codex-passport --help
+uvx --from 'codex-passport-sync==0.2.0' codex-passport --help
 ```
 
 命令会自动下载 Python 包并显示帮助。临时启动中继也可以：
 
 ```sh
 export COMPUTER_LAN_IP="替换为电脑的局域网 IPv4 地址"
-uvx --from 'codex-passport-sync[ble]==0.1.1' codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765
+uvx --from 'codex-passport-sync[ble]==0.2.0' codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765
 ```
 
 如果提示 `was not found in the package registry`，而 PyPI 项目页已经有该版本，可能是你配置的镜像尚未同步新包。
 临时优先使用官方索引即可，不必修改全局配置：
 
 ```sh
-uvx --refresh --index https://pypi.org/simple --from 'codex-passport-sync==0.1.1' codex-passport --help
-uv tool install --index https://pypi.org/simple 'codex-passport-sync[ble]==0.1.1'
+uvx --refresh --index https://pypi.org/simple --from 'codex-passport-sync==0.2.0' codex-passport --help
+uv tool install --index https://pypi.org/simple 'codex-passport-sync[ble]==0.2.0'
 ```
 
 按 `Ctrl+C` 停止。默认状态目录是 `~/.local/state/codex-passport`，首次启动 `serve` 后在该目录生成 `relay-token`。
@@ -41,7 +41,7 @@ uv tool install --index https://pypi.org/simple 'codex-passport-sync[ble]==0.1.1
 macOS / Linux 终端：
 
 ```sh
-uv tool install 'codex-passport-sync[ble]==0.1.1'
+uv tool install 'codex-passport-sync[ble]==0.2.0'
 uv tool update-shell
 ```
 
@@ -69,16 +69,16 @@ codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765 --ble "替换为自�
 
 ## 方式三：下载 wheel，直接安装
 
-无法使用 PyPI 时，下载 [Python 发布文件](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.1.1) 中的 wheel 和 `SHA256SUMS`，在文件所在目录运行：
+无法使用 PyPI 时，下载 [Python 发布文件](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.2.0) 中的 wheel 和 `SHA256SUMS`，在文件所在目录运行：
 
 ```sh
-uvx --from ./codex_passport_sync-0.1.1-py3-none-any.whl codex-passport --help
+uvx --from ./codex_passport_sync-0.2.0-py3-none-any.whl codex-passport --help
 ```
 
 持久安装并启用电脑 BLE：
 
 ```sh
-uv tool install 'codex-passport-sync[ble] @ ./codex_passport_sync-0.1.1-py3-none-any.whl'
+uv tool install 'codex-passport-sync[ble] @ ./codex_passport_sync-0.2.0-py3-none-any.whl'
 uv tool update-shell
 ```
 
@@ -89,7 +89,7 @@ wheel 本身在本地，依赖仍可能需要联网下载。安装后使用上�
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install 'codex-passport-sync[ble]==0.1.1'
+.venv/bin/python -m pip install 'codex-passport-sync[ble]==0.2.0'
 .venv/bin/codex-passport --help
 ```
 

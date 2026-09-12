@@ -6,7 +6,9 @@ Codex session notifications and quota visualization on FoloToy AI Passport, with
 
 <img src="https://raw.githubusercontent.com/JuneLeGency/codex-passport/main/docs/images/dashboard-example.png" alt="Passport graphical quota dashboard" width="240">
 
-Synthetic quota fixture rendered on the physical device; no account or conversation data.
+<img src="https://raw.githubusercontent.com/JuneLeGency/codex-passport/main/docs/images/progress-example.png" alt="Three read-only session progress cards on Passport" width="240">
+
+Synthetic fixtures rendered on the physical device; no account or real conversation data.
 
 ## What it does
 
@@ -16,7 +18,7 @@ Synthetic quota fixture rendered on the physical device; no account or conversat
 - Remaining quota compared with remaining cycle time. Orange means faster consumption, green balanced, blue slower.
 - Native 240×320 Passport dashboard and physical-button controls. Material 3 Expressive Android overview, notification and connection pages.
 
-Phone notifications show bounded titles and summaries for the four most recent sessions. Passport receives quota, counts and receipt IDs, with no conversation text.
+Phone notifications show bounded titles and summaries for up to four sessions. Passport has two pages: the original large quota dashboard and a compact quota view with the three most recently updated visible sessions. Progress cards show a title, current state and one short summary; there are no conversation controls.
 **This version does not resume conversations, send replies or approve actions.** Those stay in Codex.
 Hooks need existing sessions to restart after installation; incremental logs are a compatibility fallback, not a stable API or Codex Mobile push integration.
 Other computers need their own collectors.
@@ -26,8 +28,8 @@ Other computers need their own collectors.
 The [beginner guide](https://github.com/JuneLeGency/codex-passport/blob/main/docs/GETTING_STARTED.zh_CN.md) covers tool installation, backup/app-only flashing, APK installation without ADB, relay configuration, pairing, a real notification test, startup, switching, troubleshooting and removal.
 It uses the verified macOS + Android + Passport setup. Linux host deployment needs platform adaptation; Windows host deployment has not been validated.
 
-Download the ready-made [Android APK and Passport firmware v0.1.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.1.0).
-Python 0.1.1 is a documentation/packaging update compatible with those device files; no device reinstall is needed for this update.
+Download the ready-made [Android APK and Passport firmware v0.2.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.2.0).
+Upgrade the Python relay, Android APK and Passport firmware together to 0.2.0 to enable device progress cards. Existing BLE bonds and relay settings are retained.
 The APK is debug-signed. Back up the device before flashing and write **only the app at 0x10000 on the documented hardware layout**, preserving its other partitions.
 
 ## Python installation
@@ -35,7 +37,7 @@ The APK is debug-signed. Back up the device before flashing and write **only the
 Requires Python 3.10+ and a working, logged-in Codex CLI. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then try:
 
 ```sh
-uvx --from 'codex-passport-sync==0.1.1' codex-passport --help
+uvx --from 'codex-passport-sync==0.2.0' codex-passport --help
 ```
 
 If your configured mirror has not synchronized this new package, add `--index https://pypi.org/simple` to the uvx or uv tool install command to prioritize official PyPI.
@@ -43,7 +45,7 @@ If your configured mirror has not synchronized this new package, add `--index ht
 For persistent hooks, install a persistent tool environment instead:
 
 ```sh
-uv tool install 'codex-passport-sync[ble]==0.1.1'
+uv tool install 'codex-passport-sync[ble]==0.2.0'
 uv tool update-shell
 ```
 
@@ -63,22 +65,23 @@ Add `--ble "Passport-XXXXXX"` using your device's actual advertised name for com
 The `[ble]` extra is required for this route. Select the sender on Android's Connection page; a failed computer connection falls back to the phone and stays there until selected again.
 Do not install permanent hooks from a temporary uvx environment, whose cache can be removed.
 
-[PyPI package](https://pypi.org/project/codex-passport-sync/) · [Wheel downloads](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.1.1) · [All installation options and state paths](https://github.com/JuneLeGency/codex-passport/blob/main/docs/PYTHON.md)
+[PyPI package](https://pypi.org/project/codex-passport-sync/) · [Wheel downloads](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.2.0) · [All installation options and state paths](https://github.com/JuneLeGency/codex-passport/blob/main/docs/PYTHON.md)
 
 ## Daily controls and scope
 
 | Control | Result |
 | --- | --- |
-| UP / DOWN | Switch quota windows |
+| Short UP / DOWN | Switch dashboard / progress page |
+| Hold UP / DOWN | Switch quota window on either page |
 | Short OK while awake | Mark received notifications read; never approve an action |
 | First press while asleep | Wake only |
 | Hold OK while awake | Reconnect BLE, preserving bonds |
 
-The backlight sleeps after 60 seconds without alerts/buttons. Daily BLE frames contain no conversation text.
+The backlight sleeps after 60 seconds without alerts/buttons. Encrypted BLE frames now include up to three bounded session titles and summaries. Unsupported emoji/rare glyphs are omitted on the device; spaces, Latin and basic CJK characters use a bundled OFL font.
 An authenticated private relay and paired BLE protect access; bounded phone summaries can still contain private context.
 Keep the relay within your private network/VPN. Do not expose its HTTP port publicly. The computer must stay awake and run the collector.
 
-Both BLE routes, route switching, replay and physical controls were validated. Off-LAN WireGuard and battery endurance were not measured.
+Both BLE routes, route switching, replay and physical controls were validated. Updates do not change the selected page; progress updates stay silent unless an alert is due. Off-LAN WireGuard and battery endurance were not measured.
 See the [validation record](https://github.com/JuneLeGency/codex-passport/blob/main/docs/VALIDATION.md) for the exact evidence and limitations.
 
 ## Development and attribution

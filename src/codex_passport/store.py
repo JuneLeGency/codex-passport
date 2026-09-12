@@ -39,6 +39,7 @@ class Store:
           CREATE TABLE IF NOT EXISTS waits(thread TEXT, turn TEXT, identity TEXT,
               PRIMARY KEY(thread,turn,identity));
           CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);
+          CREATE INDEX IF NOT EXISTS events_thread_id ON events(thread,id);
         ''')
         columns={r[1] for r in self.db.execute('PRAGMA table_info(events)')}
         for col in ('title','body'):
@@ -190,6 +191,20 @@ class Store:
     def inbox(self, limit=4):
         return [dict(r) for r in self.db.execute(
             "SELECT * FROM events WHERE id IN (SELECT max(id) FROM events WHERE kind IN ('completed','failed','interrupted','approval','input') GROUP BY thread) ORDER BY id DESC LIMIT ?",(limit,))]
+
+    def progress(self, limit=3):
+        """Recent visible sessions, with current state rather than an old alert's state."""
+        rows = self.db.execute('''
+            SELECT s.*, e.id, e.kind AS event_kind, e.body,
+              (SELECT title FROM events WHERE thread=s.thread AND title!='' ORDER BY id DESC LIMIT 1) AS title
+            FROM sessions s JOIN events e ON e.id=(SELECT max(id) FROM events WHERE thread=s.thread)
+            WHERE s.updated>? AND s.status NOT IN ('closed','idle','session')
+            ORDER BY s.updated DESC, e.id DESC LIMIT ?
+        ''', (time.time()-86400, max(0, min(limit, 3))))
+        return [dict(id=r['id'], kind=r['status'], project=r['project'], ts=r['updated'],
+                     title=r['title'] or r['project'],
+                     body=clipped(r['body'],90) if r['status']==r['event_kind'] and
+                     r['status'] in ALERT_KINDS else '') for r in rows]
 
     def recent(self, limit=4):
         return [dict(r) for r in self.db.execute('SELECT * FROM events ORDER BY id DESC LIMIT ?', (limit,))]

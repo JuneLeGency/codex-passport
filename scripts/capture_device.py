@@ -1,12 +1,24 @@
 """Reconstruct a device rendering from bounded LVGL tile snapshots."""
 import argparse
+import json
 from pathlib import Path
 import time
 import serial
 from PIL import Image
-p=argparse.ArgumentParser();p.add_argument('--port',required=True);p.add_argument('--output',default='artifacts/passport-screen.png');args=p.parse_args()
-with serial.Serial(args.port,115200,timeout=.5) as s:
- s.reset_input_buffer();s.write(b'CAPTURE\n');data=bytearray();deadline=time.monotonic()+10
+p=argparse.ArgumentParser();p.add_argument('--port',required=True);p.add_argument('--output',default='artifacts/passport-screen.png');p.add_argument('--fixture',type=Path,help='Optional synthetic snapshot JSON, sent on the same USB connection');p.add_argument('--page',type=int,choices=[0,1],help='Capture a view temporarily, then restore the selected page');args=p.parse_args()
+link=serial.Serial();link.port=args.port;link.baudrate=115200;link.timeout=.5
+link.dtr=False;link.rts=False;link.open()
+with link as s:
+ if args.fixture:
+  fixture=json.loads(args.fixture.read_text());raw=json.dumps(fixture,ensure_ascii=False,separators=(',',':')).encode()+b'\n'
+  end=time.monotonic()+12;sent=0;acknowledged=False
+  while time.monotonic()<end:
+   if time.monotonic()-sent>1:s.write(raw);sent=time.monotonic()
+   try:reply=json.loads(s.readline())
+   except ValueError:continue
+   if isinstance(reply,dict) and reply.get('ack')==fixture['seq']:acknowledged=True;break
+  if not acknowledged:raise RuntimeError('No fixture device acknowledgement')
+ s.reset_input_buffer();s.write(('CAPTURE'+('' if args.page is None else str(args.page))+'\n').encode());data=bytearray();deadline=time.monotonic()+10
  while time.monotonic()<deadline:
   data.extend(s.read(s.in_waiting or 1))
   if b'PASSPORT_CAPTURE_END' in data:break

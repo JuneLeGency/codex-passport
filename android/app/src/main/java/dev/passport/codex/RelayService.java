@@ -236,7 +236,11 @@ public class RelayService extends Service {
         if(!ready||pendingSeq!=0)return;
         try {
             data=new JSONObject(data.toString());
-            data.put("recent",new JSONArray());
+            JSONArray threads=data.optJSONArray("_threads");
+            if(threads==null)threads=data.optJSONArray("recent");
+            JSONArray recent=new JSONArray();
+            if(threads!=null)for(int i=0;i<Math.min(3,threads.length());i++)recent.put(threads.getJSONObject(i));
+            data.remove("_threads");data.put("recent",recent);
             JSONObject event=data.optJSONObject("event");
             if(event!=null)data.put("event",new JSONObject().put("id",event.getInt("id"))
                 .put("kind",event.getString("kind")).put("project","").put("time",event.getLong("time")));

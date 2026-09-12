@@ -1,7 +1,7 @@
 # Build and development
 
 End users can use the [step-by-step guide](GETTING_STARTED.zh_CN.md) and download the APK/firmware.
-This page is for rebuilding them. Runtime behavior is unchanged between Python 0.1.0 and the 0.1.1 packaging/documentation update; the Android app and firmware remain 0.1.0.
+This page is for rebuilding them. Version 0.2.0 adds the device progress page and bounded thread summaries over BLE; update all three components together.
 
 ## Python
 
@@ -9,7 +9,7 @@ This page is for rebuilding them. Runtime behavior is unchanged between Python 0
 uv sync --extra ble
 uv run python -m unittest discover -s tests -v
 uv build --no-sources
-uvx --from ./dist/codex_passport_sync-0.1.1-py3-none-any.whl codex-passport --help
+uvx --from ./dist/codex_passport_sync-0.2.0-py3-none-any.whl codex-passport --help
 ```
 
 Python 3.10+. Tests require local socket access. `src/`, CLI commands and protocol are independently authored.
@@ -27,16 +27,17 @@ gradle -p android --no-daemon assembleDebug
 ```
 
 Output: `android/app/build/outputs/apk/debug/app-debug.apk`. Package: `dev.passport.codex`.
-The published 0.1.0 APK uses a debug signature. A locally built APK may have a different signing key and cannot necessarily replace an installed APK without uninstalling it; that would remove its saved relay settings.
+The published 0.2.0 APK uses a debug signature. A locally built APK may have a different signing key and cannot necessarily replace an installed APK without uninstalling it; that would remove its saved relay settings.
 Published APK installation does not require ADB. Developers can install to an explicitly selected device with `adb -s DEVICE install -r PATH_TO_APK`.
 
 ## Firmware
 
 Install and activate ESP-IDF 5.5.3 using Espressif's instructions for your OS.
-Then fetch the official BSP at its pinned commit:
+Then fetch the official BSP and generate the OFL bitmap font (Node.js/npm required by the pinned font converter):
 
 ```sh
 uv run python scripts/fetch_bsp.py
+uv run python scripts/build_font.py
 idf.py -C firmware build
 ```
 
@@ -56,7 +57,7 @@ java -cp /tmp/passport-pace UsagePaceTest
 
 `tests/test_protocol.c` additionally needs cJSON headers/library; IDF builds use its bundled cJSON component.
 GitHub Actions runs Python and native control tests. Manual physical-button acceptance and BLE delivery evidence are recorded separately in [VALIDATION.md](VALIDATION.md).
-USB screenshot tooling is in `scripts/capture_device.py`; it requires an explicit `--port`. Use synthetic data before sharing screenshots.
+USB screenshot tooling is in `scripts/capture_device.py`; it requires an explicit `--port`. Use `--fixture synthetic.json --page 0` or `--page 1` to render and capture a synthetic snapshot on one USB connection. The diagnostic page selection is temporary and does not mark notifications read. Use synthetic data before sharing screenshots.
 
 ## Release procedure
 

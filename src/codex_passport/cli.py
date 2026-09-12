@@ -94,6 +94,7 @@ def snapshot(store, seq, event=None):
             'tokens': usage.get('tokens') if isinstance(usage.get('tokens'), int) else -1,
             'today': usage.get('today') if isinstance(usage.get('today'), int) else -1,
             'recent': [wire_event(e) for e in store.inbox(4)],
+            '_threads': [wire_event(e) for e in store.progress(3)],
             'event': wire_event(event) if event else None}
     # JSON escaping can expand punctuation; keep the BLE line within its 2048-byte limit.
     while frame['recent'] and len(json.dumps(frame,ensure_ascii=False,separators=(',',':')).encode())>1900:
@@ -102,9 +103,9 @@ def snapshot(store, seq, event=None):
 
 
 def device_frame(frame):
-    """The graphical device needs counts, quota and receipt IDs, not conversation text."""
-    result = {k: v for k, v in frame.items() if k != '_link'}
-    result['recent'] = []
+    """Three bounded progress cards; notification delivery remains a separate receipt."""
+    result = {k: v for k, v in frame.items() if k not in ('_link', '_threads')}
+    result['recent'] = frame.get('_threads', frame.get('recent', []))[:3]
     event = frame.get('event')
     result['event'] = None if not event else {
         'id': event['id'], 'kind': event['kind'], 'project': '', 'time': event['time']}
@@ -188,7 +189,7 @@ async def run(args, store):
                 event = store.pending()
                 if not pending_seq and (event or now-last_send >= 2):
                     seq = seq + 1 if seq < 2_000_000_000 else 1
-                    payload = json.dumps(snapshot(store, seq, event), ensure_ascii=False, separators=(',', ':')).encode()+b'\n'
+                    payload = json.dumps(device_frame(snapshot(store, seq, event)), ensure_ascii=False, separators=(',', ':')).encode()+b'\n'
                     if len(payload) > 2048:
                         raise ValueError('Snapshot exceeds device frame size')
                     link.write(payload)

@@ -10,6 +10,10 @@ int main(void) {
     assert(control_event(&s,1,1,false)==CONTROL_PAGE);
     assert(control_event(&s,2,2,false)==CONTROL_NONE);
     assert(control_event(&s,2,3,false)==CONTROL_RECONNECT);
+    assert(control_event(&s,0,3,false)==CONTROL_WINDOW);
+    assert(control_event(&s,1,3,false)==CONTROL_WINDOW);
+    assert(control_event(&s,0,0,true)==CONTROL_WAKE);
+    assert(control_event(&s,0,3,false)==CONTROL_NONE);
     assert(control_event(&s,2,0,true)==CONTROL_WAKE);
     assert(control_event(&s,2,3,false)==CONTROL_NONE);
     assert(control_event(&s,9,1,false)==CONTROL_NONE);

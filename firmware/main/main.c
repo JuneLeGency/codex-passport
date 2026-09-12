@@ -27,9 +27,14 @@ static control_state_t controls;
 typedef struct { int key, event; } key_event_t;
 
 static uint32_t seen_event, read_through;
-static int page, battery=-1;
-static lv_obj_t *screen, *connection, *battery_label, *amount, *window_label, *reset_label;
-static lv_obj_t *quota_ring, *time_ring, *cards[3], *counts[3], *dots[2];
+static int page, window_index, battery=-1;
+typedef struct {
+    lv_obj_t *screen, *connection, *battery_label, *amount, *window_label, *reset_label;
+    lv_obj_t *quota_ring, *time_ring, *cards[3], *counts[3], *dots[2];
+    lv_obj_t *notice_titles[3], *notice_bodies[3];
+} view_t;
+static view_t views[2], *ui;
+LV_FONT_DECLARE(passport_cjk16);
 #define INK 0xEDF4E9
 #define MUTED 0x95A491
 #define GREEN 0xBCE6A4
@@ -49,7 +54,7 @@ static lv_obj_t *label(lv_obj_t *parent,int x,int y,int width,const lv_font_t *f
 }
 static lv_obj_t *ring(int x,int y,int diameter,int width,uint32_t color)
 {
-    lv_obj_t *o=lv_arc_create(screen);
+    lv_obj_t *o=lv_arc_create(ui->screen);
     lv_obj_set_pos(o,x,y); lv_obj_set_size(o,diameter,diameter);
     lv_arc_set_bg_angles(o,135,45); lv_arc_set_range(o,0,100);
     lv_obj_remove_style(o,NULL,LV_PART_KNOB); lv_obj_remove_flag(o,LV_OBJ_FLAG_CLICKABLE);
@@ -58,75 +63,167 @@ static lv_obj_t *ring(int x,int y,int diameter,int width,uint32_t color)
     lv_obj_set_style_arc_color(o,lv_color_hex(color),LV_PART_INDICATOR);
     lv_arc_set_value(o,0); return o;
 }
-static void create_ui(void)
+static void create_dashboard(void)
 {
-    screen=lv_obj_create(NULL); lv_obj_set_style_bg_color(screen,lv_color_hex(BG),0);
-    lv_obj_remove_flag(screen,LV_OBJ_FLAG_SCROLLABLE);
-    connection=label(screen,16,13,75,&lv_font_montserrat_14,GREEN);
-    battery_label=label(screen,151,13,73,&lv_font_montserrat_14,MUTED);
-    lv_obj_set_style_text_align(battery_label,LV_TEXT_ALIGN_RIGHT,0);
-    quota_ring=ring(28,40,184,12,GREEN); time_ring=ring(47,59,146,4,MUTED);
-    amount=label(screen,28,100,184,&lv_font_montserrat_48,INK);
-    lv_obj_set_style_text_align(amount,LV_TEXT_ALIGN_CENTER,0);
-    window_label=label(screen,44,156,152,&lv_font_montserrat_14,MUTED);
-    lv_obj_set_style_text_align(window_label,LV_TEXT_ALIGN_CENTER,0);
-    reset_label=label(screen,40,205,160,&lv_font_montserrat_14,MUTED);
-    lv_obj_set_style_text_align(reset_label,LV_TEXT_ALIGN_CENTER,0);
+    ui->screen=lv_obj_create(NULL); lv_obj_set_style_bg_color(ui->screen,lv_color_hex(BG),0);
+    lv_obj_remove_flag(ui->screen,LV_OBJ_FLAG_SCROLLABLE);
+    ui->connection=label(ui->screen,16,13,75,&lv_font_montserrat_14,GREEN);
+    ui->battery_label=label(ui->screen,151,13,73,&lv_font_montserrat_14,MUTED);
+    lv_obj_set_style_text_align(ui->battery_label,LV_TEXT_ALIGN_RIGHT,0);
+    ui->quota_ring=ring(28,40,184,12,GREEN); ui->time_ring=ring(47,59,146,4,MUTED);
+    ui->amount=label(ui->screen,28,100,184,&lv_font_montserrat_48,INK);
+    lv_obj_set_style_text_align(ui->amount,LV_TEXT_ALIGN_CENTER,0);
+    ui->window_label=label(ui->screen,44,156,152,&lv_font_montserrat_14,MUTED);
+    lv_obj_set_style_text_align(ui->window_label,LV_TEXT_ALIGN_CENTER,0);
+    ui->reset_label=label(ui->screen,40,205,160,&lv_font_montserrat_14,MUTED);
+    lv_obj_set_style_text_align(ui->reset_label,LV_TEXT_ALIGN_CENTER,0);
     const char *symbols[3]={LV_SYMBOL_PLAY,LV_SYMBOL_WARNING,LV_SYMBOL_BELL};
     uint32_t colors[3]={BLUE,AMBER,GREEN};
     for(unsigned i=0;i<3;++i) {
-        cards[i]=lv_obj_create(screen);lv_obj_set_pos(cards[i],16+i*72,239);lv_obj_set_size(cards[i],64,58);
-        lv_obj_set_style_radius(cards[i],20,0);lv_obj_set_style_bg_color(cards[i],lv_color_hex(PANEL),0);
-        lv_obj_set_style_border_width(cards[i],0,0);lv_obj_set_style_pad_all(cards[i],0,0);lv_obj_remove_flag(cards[i],LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_t *icon=label(cards[i],0,7,64,&lv_font_montserrat_14,colors[i]);lv_label_set_text(icon,symbols[i]);lv_obj_set_style_text_align(icon,LV_TEXT_ALIGN_CENTER,0);
-        counts[i]=label(cards[i],0,29,64,&lv_font_montserrat_20,INK);lv_obj_set_style_text_align(counts[i],LV_TEXT_ALIGN_CENTER,0);
+        ui->cards[i]=lv_obj_create(ui->screen);lv_obj_set_pos(ui->cards[i],16+i*72,239);lv_obj_set_size(ui->cards[i],64,58);
+        lv_obj_set_style_radius(ui->cards[i],20,0);lv_obj_set_style_bg_color(ui->cards[i],lv_color_hex(PANEL),0);
+        lv_obj_set_style_border_width(ui->cards[i],0,0);lv_obj_set_style_pad_all(ui->cards[i],0,0);lv_obj_remove_flag(ui->cards[i],LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t *icon=label(ui->cards[i],0,7,64,&lv_font_montserrat_14,colors[i]);lv_label_set_text(icon,symbols[i]);lv_obj_set_style_text_align(icon,LV_TEXT_ALIGN_CENTER,0);
+        ui->counts[i]=label(ui->cards[i],0,29,64,&lv_font_montserrat_20,INK);lv_obj_set_style_text_align(ui->counts[i],LV_TEXT_ALIGN_CENTER,0);
     }
     for(unsigned i=0;i<2;++i) {
-        dots[i]=lv_obj_create(screen);lv_obj_set_pos(dots[i],110+i*14,309);lv_obj_set_size(dots[i],6,6);
-        lv_obj_set_style_radius(dots[i],LV_RADIUS_CIRCLE,0);lv_obj_set_style_border_width(dots[i],0,0);
+        ui->dots[i]=lv_obj_create(ui->screen);lv_obj_set_pos(ui->dots[i],110+i*14,309);lv_obj_set_size(ui->dots[i],6,6);
+        lv_obj_set_style_radius(ui->dots[i],LV_RADIUS_CIRCLE,0);lv_obj_set_style_border_width(ui->dots[i],0,0);
     }
-    lv_screen_load(screen);
+    lv_screen_load(ui->screen);
+}
+static void create_progress(void)
+{
+    ui->screen=lv_obj_create(NULL); lv_obj_set_style_bg_color(ui->screen,lv_color_hex(BG),0);
+    lv_obj_remove_flag(ui->screen,LV_OBJ_FLAG_SCROLLABLE);
+    ui->connection=label(ui->screen,14,9,75,&lv_font_montserrat_14,GREEN);
+    ui->battery_label=label(ui->screen,151,9,75,&lv_font_montserrat_14,MUTED);
+    lv_obj_set_style_text_align(ui->battery_label,LV_TEXT_ALIGN_RIGHT,0);
+    ui->quota_ring=ring(12,32,86,7,GREEN); ui->time_ring=ring(23,43,64,3,MUTED);
+    ui->amount=label(ui->screen,12,57,86,&lv_font_montserrat_20,INK);
+    lv_obj_set_style_text_align(ui->amount,LV_TEXT_ALIGN_CENTER,0);
+    ui->window_label=label(ui->screen,115,37,110,&lv_font_montserrat_20,INK);
+    ui->reset_label=label(ui->screen,115,66,110,&lv_font_montserrat_14,MUTED);
+    for(unsigned i=0;i<3;++i) {
+        ui->counts[i]=label(ui->screen,115+i*37,91,38,&lv_font_montserrat_14,i==1?AMBER:MUTED);
+        ui->cards[i]=lv_obj_create(ui->screen);lv_obj_set_pos(ui->cards[i],12,124+i*64);lv_obj_set_size(ui->cards[i],216,58);
+        lv_obj_set_style_radius(ui->cards[i],13,0);lv_obj_set_style_bg_color(ui->cards[i],lv_color_hex(PANEL),0);
+        lv_obj_set_style_border_width(ui->cards[i],0,0);lv_obj_set_style_pad_all(ui->cards[i],0,0);
+        lv_obj_remove_flag(ui->cards[i],LV_OBJ_FLAG_SCROLLABLE);lv_obj_remove_flag(ui->cards[i],LV_OBJ_FLAG_CLICKABLE);
+        ui->notice_titles[i]=label(ui->cards[i],12,3,192,&passport_cjk16,INK);
+        ui->notice_bodies[i]=label(ui->cards[i],12,29,192,&passport_cjk16,MUTED);
+        lv_obj_set_height(ui->notice_titles[i],24);lv_obj_set_height(ui->notice_bodies[i],24);
+    }
+    for(unsigned i=0;i<2;++i) {
+        ui->dots[i]=lv_obj_create(ui->screen);lv_obj_set_pos(ui->dots[i],48+i*10,112);lv_obj_set_size(ui->dots[i],4,4);
+        lv_obj_set_style_radius(ui->dots[i],LV_RADIUS_CIRCLE,0);lv_obj_set_style_border_width(ui->dots[i],0,0);
+    }
+    lv_screen_load(ui->screen);
+}
+static void create_ui(void)
+{
+    ui=&views[0];create_dashboard();
+    ui=&views[1];create_progress();
+    ui=&views[0];lv_screen_load(ui->screen);
+}
+/* Never send unsupported emoji or rare glyphs to LVGL's missing-glyph box. */
+static void readable(const char *input,char *output,size_t capacity)
+{
+    size_t used=0;
+    const unsigned char *p=(const unsigned char *)input;
+    while(*p && used+1<capacity) {
+        unsigned n=*p<0x80?1:(*p&0xe0)==0xc0?2:(*p&0xf0)==0xe0?3:4;
+        uint32_t cp=*p & (n==1?0x7f:n==2?0x1f:n==3?0x0f:0x07);
+        bool valid=true;
+        for(unsigned i=1;i<n;++i){if(!p[i] || (p[i]&0xc0)!=0x80){valid=false;break;}cp=(cp<<6)|(p[i]&0x3f);}
+        if(!valid)break;
+        lv_font_glyph_dsc_t glyph={0};
+        if(cp==32 || passport_cjk16.get_glyph_dsc(&passport_cjk16,&glyph,cp,0)) {
+            if(used+n>=capacity)break;
+            memcpy(output+used,p,n);used+=n;
+        } else if(used && output[used-1]!=' ')output[used++]=' ';
+        p+=n;
+    }
+    while(used && output[used-1]==' ')--used;
+    output[used]='\0';
+}
+static void render_notices(bool live)
+{
+    for(unsigned i=0;i<3;++i) {
+        if(i>=state.recent_count) {
+            if(i==0){lv_obj_remove_flag(ui->cards[i],LV_OBJ_FLAG_HIDDEN);lv_label_set_text(ui->notice_titles[i],"等待会话进展");lv_label_set_text(ui->notice_bodies[i],"新进展会自动出现在这里");}
+            else lv_obj_add_flag(ui->cards[i],LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
+        lv_obj_remove_flag(ui->cards[i],LV_OBJ_FLAG_HIDDEN);
+        passport_notice_t *notice=&state.recent[i];
+        const char *status="进行中";uint32_t hue=BLUE;
+        if(!strcmp(notice->kind,"completed")){status="已完成";hue=GREEN;}
+        else if(!strcmp(notice->kind,"approval")){status="待批准";hue=AMBER;}
+        else if(!strcmp(notice->kind,"input")){status="待回复";hue=AMBER;}
+        else if(!strcmp(notice->kind,"failed")){status="遇到问题";hue=AMBER;}
+        else if(!strcmp(notice->kind,"interrupted")){status="已中断";hue=MUTED;}
+        else if(!strcmp(notice->kind,"compacting")){status="整理上下文";}
+        char title[96],body[256],clean[160];
+        readable(notice->title[0]?notice->title:notice->project,title,sizeof(title));
+        readable(notice->body,clean,sizeof(clean));
+        snprintf(body,sizeof(body),"%s%s%s",live?status:"离线",clean[0]?" · ":"",clean);
+        lv_label_set_text(ui->notice_titles[i],title[0]?title:"会话");
+        lv_label_set_text(ui->notice_bodies[i],body);
+        lv_obj_set_style_text_color(ui->notice_bodies[i],lv_color_hex(live?hue:MUTED),0);
+    }
 }
 static void render(uint64_t now)
 {
+    ui=&views[page];
+    if(lv_screen_active()!=ui->screen)lv_screen_load(ui->screen);
     bool live=received_ms && now-received_ms<30000;
-    lv_label_set_text(connection,live?LV_SYMBOL_BLUETOOTH:LV_SYMBOL_CLOSE);
-    lv_obj_set_style_text_color(connection,lv_color_hex(live?GREEN:MUTED),0);
-    if(battery<0)lv_label_set_text(battery_label,LV_SYMBOL_BATTERY_EMPTY);
-    else lv_label_set_text_fmt(battery_label,"%s %d%%",battery>80?LV_SYMBOL_BATTERY_FULL:battery>60?LV_SYMBOL_BATTERY_3:battery>30?LV_SYMBOL_BATTERY_2:battery>10?LV_SYMBOL_BATTERY_1:LV_SYMBOL_BATTERY_EMPTY,battery);
-    unsigned index=(unsigned)page;
+    lv_label_set_text(ui->connection,live?LV_SYMBOL_BLUETOOTH:LV_SYMBOL_CLOSE);
+    lv_obj_set_style_text_color(ui->connection,lv_color_hex(live?GREEN:MUTED),0);
+    if(battery<0)lv_label_set_text(ui->battery_label,LV_SYMBOL_BATTERY_EMPTY);
+    else lv_label_set_text_fmt(ui->battery_label,"%s %d%%",battery>80?LV_SYMBOL_BATTERY_FULL:battery>60?LV_SYMBOL_BATTERY_3:battery>30?LV_SYMBOL_BATTERY_2:battery>10?LV_SYMBOL_BATTERY_1:LV_SYMBOL_BATTERY_EMPTY,battery);
+    unsigned index=(unsigned)window_index;
     if(!state.windows[index].minutes && state.windows[!index].minutes)index=!index;
     passport_window_t *window=&state.windows[index];
     uint64_t epoch=state.now+(received_ms?(now-received_ms)/1000:0);
     passport_pace_t pace;
     bool available=live && passport_pace(window,epoch,&pace);
     uint32_t hue=available?(pace.speed>0?AMBER:pace.speed<0?BLUE:GREEN):MUTED;
-    lv_obj_set_style_arc_color(quota_ring,lv_color_hex(hue),LV_PART_INDICATOR);
-    lv_arc_set_value(quota_ring,available?window->remaining:0);lv_arc_set_value(time_ring,available?100-pace.elapsed:0);
-    if(available)lv_label_set_text_fmt(amount,"%d%%",window->remaining);else lv_label_set_text(amount,"--");
-    if(window->minutes && window->minutes%1440==0)lv_label_set_text_fmt(window_label,"%" PRIu32 "d",window->minutes/1440);
-    else if(window->minutes && window->minutes%60==0)lv_label_set_text_fmt(window_label,"%" PRIu32 "h",window->minutes/60);
-    else if(window->minutes)lv_label_set_text_fmt(window_label,"%" PRIu32 "m",window->minutes);
-    else lv_label_set_text(window_label,"");
+    lv_obj_set_style_arc_color(ui->quota_ring,lv_color_hex(hue),LV_PART_INDICATOR);
+    lv_arc_set_value(ui->quota_ring,available?window->remaining:0);lv_arc_set_value(ui->time_ring,available?100-pace.elapsed:0);
+    if(available)lv_label_set_text_fmt(ui->amount,"%d%%",window->remaining);else lv_label_set_text(ui->amount,"--");
+    if(window->minutes && window->minutes%1440==0)lv_label_set_text_fmt(ui->window_label,"%" PRIu32 "d",window->minutes/1440);
+    else if(window->minutes && window->minutes%60==0)lv_label_set_text_fmt(ui->window_label,"%" PRIu32 "h",window->minutes/60);
+    else if(window->minutes)lv_label_set_text_fmt(ui->window_label,"%" PRIu32 "m",window->minutes);
+    else lv_label_set_text(ui->window_label,"");
     if(available) {
         uint64_t mins=(window->reset-epoch+59)/60;
-        if(mins>=1440)lv_label_set_text_fmt(reset_label,LV_SYMBOL_REFRESH "  %" PRIu64 "d %" PRIu64 "h",mins/1440,mins%1440/60);
-        else lv_label_set_text_fmt(reset_label,LV_SYMBOL_REFRESH "  %02" PRIu64 ":%02" PRIu64,mins/60,mins%60);
-    } else lv_label_set_text(reset_label,LV_SYMBOL_REFRESH "  --:--");
+        if(mins>=1440)lv_label_set_text_fmt(ui->reset_label,LV_SYMBOL_REFRESH "  %" PRIu64 "d %" PRIu64 "h",mins/1440,mins%1440/60);
+        else lv_label_set_text_fmt(ui->reset_label,LV_SYMBOL_REFRESH "  %02" PRIu64 ":%02" PRIu64,mins/60,mins%60);
+    } else lv_label_set_text(ui->reset_label,LV_SYMBOL_REFRESH "  --:--");
     uint32_t unread=state.latest<=read_through?0:state.unread;
     uint32_t values[3]={live?state.running:0,live?state.waiting:0,unread};
     for(unsigned i=0;i<3;++i) {
-        lv_label_set_text_fmt(counts[i],"%" PRIu32,values[i]);
-        lv_obj_set_style_border_width(cards[i],i>0&&values[i]>0?1:0,0);
-        lv_obj_set_style_border_color(cards[i],lv_color_hex(i==1?AMBER:GREEN),0);
+        const char *symbols[3]={LV_SYMBOL_PLAY,LV_SYMBOL_WARNING,LV_SYMBOL_BELL};
+        if(page==1)lv_label_set_text_fmt(ui->counts[i],"%s%" PRIu32,symbols[i],values[i]);
+        else {
+            lv_label_set_text_fmt(ui->counts[i],"%" PRIu32,values[i]);
+            lv_obj_set_style_border_width(ui->cards[i],i>0&&values[i]>0?1:0,0);
+            lv_obj_set_style_border_color(ui->cards[i],lv_color_hex(i==1?AMBER:GREEN),0);
+        }
     }
     for(unsigned i=0;i<2;++i) {
-        lv_obj_set_style_bg_color(dots[i],lv_color_hex(index==i?GREEN:PANEL),0);
-        if(state.windows[i].minutes)lv_obj_remove_flag(dots[i],LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(dots[i],LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(ui->dots[i],lv_color_hex((unsigned)page==i?GREEN:PANEL),0);
+
     }
+    if(page==1)render_notices(live);
     int pin=passport_ble_passkey();
-    lv_obj_set_style_text_font(amount,pin>=0?&lv_font_montserrat_28:&lv_font_montserrat_48,0);
-    if(pin>=0){lv_label_set_text_fmt(amount,"%06d",pin);lv_label_set_text(window_label,LV_SYMBOL_BLUETOOTH);interaction_ms=now;}
+    lv_obj_set_style_text_font(ui->amount,page==1?&lv_font_montserrat_20:pin>=0?&lv_font_montserrat_28:&lv_font_montserrat_48,0);
+    if(pin>=0){
+        if(page==0){lv_label_set_text_fmt(ui->amount,"%06d",pin);lv_label_set_text(ui->window_label,LV_SYMBOL_BLUETOOTH);}
+        else {lv_label_set_text(ui->amount,LV_SYMBOL_BLUETOOTH);lv_label_set_text_fmt(ui->window_label,"%06d",pin);}
+        lv_label_set_text(ui->reset_label,"PAIR");interaction_ms=now;
+    }
 }
 static void on_button(bsp_btn_t button,bsp_btn_ev_t event,void *context)
 {
@@ -178,10 +275,10 @@ static void capture_tile(lv_obj_t *obj)
 static void capture(void)
 {
     printf("PASSPORT_TILES 240 320\n");
-    capture_tile(quota_ring);capture_tile(time_ring);
-    capture_tile(connection);capture_tile(battery_label);capture_tile(amount);capture_tile(window_label);capture_tile(reset_label);
-    for(unsigned i=0;i<3;++i)capture_tile(cards[i]);
-    for(unsigned i=0;i<2;++i)capture_tile(dots[i]);
+    capture_tile(ui->quota_ring);capture_tile(ui->time_ring);
+    capture_tile(ui->connection);capture_tile(ui->battery_label);capture_tile(ui->amount);capture_tile(ui->window_label);capture_tile(ui->reset_label);
+    for(unsigned i=0;i<3;++i){capture_tile(ui->counts[i]);capture_tile(ui->cards[i]);}
+    for(unsigned i=0;i<2;++i)capture_tile(ui->dots[i]);
     printf("PASSPORT_CAPTURE_END\n");
 }
 static void usb_task(void *context)
@@ -199,6 +296,9 @@ static void usb_task(void *context)
         if(c=='\n') {
             line[length]='\0';
             if(!overflow && !strcmp(line,"CAPTURE")) { int yes=1; xQueueOverwrite(captures,&yes); }
+            else if(!overflow && (!strcmp(line,"CAPTURE0") || !strcmp(line,"CAPTURE1"))) {
+                int target=2+line[7]-'0';xQueueOverwrite(captures,&target);
+            }
             else if(!overflow && passport_parse(line,length,&next)) {
                 if(xQueueSend(snapshots,&next,pdMS_TO_TICKS(100))!=pdTRUE) printf("{\"v\":1,\"busy\":true}\n");
             } else printf("{\"v\":1,\"invalid\":true}\n");
@@ -228,7 +328,7 @@ void app_main(void)
         bool updated=xQueueReceive(snapshots,&state,0)==pdTRUE;
         if(updated) {
             received_ms=now;
-            if(state.event.id>seen_event) { seen_event=state.event.id; interaction_ms=now; page=0; }
+            if(state.event.id>seen_event) { seen_event=state.event.id; interaction_ms=now; }
         }
         key_event_t key;
         while(xQueueReceive(buttons,&key,0)==pdTRUE) {
@@ -236,6 +336,7 @@ void app_main(void)
             if(action!=CONTROL_NONE)interaction_ms=now;
             if(action==CONTROL_READ) { read_through=state.latest; char reply[96]; snprintf(reply,sizeof(reply),"{\"v\":1,\"read\":%" PRIu32 "}\n",read_through); respond(reply); }
             else if(action==CONTROL_PAGE)page=!page;
+            else if(action==CONTROL_WINDOW)window_index=!window_index;
             else if(action==CONTROL_RECONNECT)passport_ble_reconnect();
         }
         if(now-last_battery>10000 || battery<0) { battery=bsp_battery_soc(); last_battery=now; }
@@ -244,7 +345,12 @@ void app_main(void)
             last_ui=now; last_pin=pin;
             render(now);
             int requested;
-            if(xQueueReceive(captures,&requested,0)==pdTRUE) capture();
+            if(xQueueReceive(captures,&requested,0)==pdTRUE) {
+                int previous=page;
+                if(requested>=2){page=requested-2;render(now);}
+                capture();
+                if(page!=previous){page=previous;render(now);}
+            }
             bsp_lvgl_unlock();
         }
         if(updated) { char reply[160]; snprintf(reply,sizeof(reply),"{\"v\":1,\"ack\":%" PRIu32 ",\"event\":%" PRIu32 ",\"read\":%" PRIu32 ",\"heap\":%" PRIu32 "}\n",state.seq,state.event.id,read_through,esp_get_free_heap_size()); respond(reply); }

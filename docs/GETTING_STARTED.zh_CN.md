@@ -5,7 +5,7 @@
 Linux 用户可参考相同的前台中继命令，但自启动和系统蓝牙配置需自行适配；Windows 主机尚未完成验收，本指南的终端命令不适用于 PowerShell。
 
 完成后的效果：电脑运行 Codex，手机通过局域网读取通知与用量，再通过 BLE 发给 Passport。
-Passport 显示用量环、进度和未读数量；手机“通知”页显示最近四个会话的标题与短摘要。
+Passport 首页显示原来的大用量环，第二页显示紧凑用量和最近三个会话的状态/短摘要；手机“通知”页显示最近四个会话的标题与短摘要。
 本版不支持在手机继续对话、回复问题或批准操作，这些仍需回到 Codex 完成。
 
 ## 1. 准备好这些东西
@@ -60,11 +60,11 @@ uv run codex-passport --help
 
 ## 3. 给 Passport 安装固件（只做一次）
 
-如果你的 Passport 已经运行本项目的图形仪表，可以跳到第 4 步。更新 Python 文档版本不需要重复烧录。
+如果你的 Passport 已经运行本项目的图形仪表，可以跳到第 4 步。如果从旧版升级到 0.2.0，请同时更新固件、APK 和 Python 中继；仅新固件搭配旧转发端无法显示进展卡片。
 
-打开 [设备文件下载页 v0.1.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.1.0)，在 Assets 下载：
+打开 [设备文件下载页 v0.2.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.2.0)，在 Assets 下载：
 
-- `codex-passport-0.1.0.bin`：Passport 应用固件。
+- `codex-passport-0.2.0.bin`：Passport 应用固件。
 - `SHA256SUMS`：文件校验值。
 - `THIRD_PARTY_NOTICES.txt`：随二进制保留的第三方许可证。
 
@@ -78,7 +78,7 @@ uv run python -m serial.tools.list_ports -v
 
 ```sh
 export PASSPORT_PORT="替换为刚找到的完整串口路径"
-shasum -a 256 downloads/codex-passport-0.1.0.bin
+shasum -a 256 downloads/codex-passport-0.2.0.bin
 ```
 
 输出开头的哈希应与 `SHA256SUMS` 中对应 `.bin` 一行完全一致。不一致时重新下载，不要烧录。
@@ -94,7 +94,7 @@ uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_P
 备份成功后，只写应用分区：
 
 ```sh
-uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_PORT" write-flash 0x10000 downloads/codex-passport-0.1.0.bin
+uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_PORT" write-flash 0x10000 downloads/codex-passport-0.2.0.bin
 ```
 
 预期：工具完成写入和校验，设备重启后出现圆环仪表。还没连接中继时用量暂不可用，这是正常的。
@@ -103,7 +103,7 @@ uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_P
 
 ## 4. 在手机安装 App
 
-用**手机浏览器**打开同一个 [v0.1.0 下载页](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.1.0)，下载 `codex-passport-0.1.0.apk` 并点击安装。
+用**手机浏览器**打开同一个 [v0.2.0 下载页](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.2.0)，下载 `codex-passport-0.2.0.apk` 并点击安装。
 按 Android 的提示，给当前浏览器/文件管理器允许“安装未知应用”。这是本项目的调试签名 APK，尚未上架应用商店。
 不需要开启开发者模式、USB 调试或无线 ADB。
 
@@ -178,10 +178,13 @@ uv run codex-passport --state-dir .runtime/live events
 | 绿色 | 与匀速预算相差不超过 5 个百分点 |
 | 蓝色 | 消耗较慢，余量相对充裕 |
 | 底部三个图标 | 运行、待回复、未读数量 |
-| 短按上 / 下 | 切换额度周期 |
+| 短按上 / 下 | 切换大 dashboard / 三会话进展页 |
+| 长按上 / 下 | 切换额度周期，两页共享所选周期 |
 | 亮屏时短按 OK | 将当前通知标为已读，不会批准任务 |
 | 熄屏后第一次按键 | 只唤醒；不换页、不清未读 |
 | 亮屏时长按 OK 约 2 秒再松开 | 重连 BLE，保留绑定；正常不需重新输入验证码 |
+
+进展页只展示当前状态：进行中、待回复、待批准、已完成等，不提供任务操作或详情菜单。内容按会话合并，最多三条；长文本省略。新进展不会强制切换你正在看的页面。
 
 屏幕不是触屏，不能点击圆环或图标。60 秒没有提醒/按键会熄屏；只是数据刷新不会一直唤醒它。
 例如周期过去一半，额度已用 70%，就比匀速预算快 20 个百分点；颜色反映当前进度，不预测未来用量。

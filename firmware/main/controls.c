@@ -8,7 +8,7 @@ control_action_t control_event(control_state_t *state, int key, int event, bool 
     }
     if(state->suppress){state->suppress=false;return CONTROL_NONE;}
     if(asleep)return CONTROL_WAKE;
-    if(event==3)return key==2?CONTROL_RECONNECT:CONTROL_NONE;
+    if(event==3)return key==2?CONTROL_RECONNECT:CONTROL_WINDOW;
     if(event==2)return CONTROL_NONE; /* Double-click never accidentally clears unread. */
     return key==2?CONTROL_READ:CONTROL_PAGE;
 }

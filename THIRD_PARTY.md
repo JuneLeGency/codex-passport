@@ -10,6 +10,7 @@ Dependencies are fetched separately and retain their own licenses.
 | [LVGL](https://github.com/lvgl/lvgl) | Device graphics and bundled fonts/icons | MIT; retain bundled asset notices |
 | [Material Components Android](https://github.com/material-components/material-components-android/tree/1.14.0) | Native M3 Expressive components | Apache-2.0 |
 | [AndroidX](https://developer.android.com/jetpack/androidx) | Android UI compatibility | Apache-2.0 |
+| [Noto Sans CJK](https://github.com/notofonts/noto-cjk) | 16 px device text | [SIL OFL 1.1](firmware/fonts/OFL.txt) |
 | [Bleak](https://github.com/hbldh/bleak) | Computer BLE client | MIT |
 | [pySerial](https://github.com/pyserial/pyserial) | Optional USB diagnostics | BSD-3-Clause |
 
