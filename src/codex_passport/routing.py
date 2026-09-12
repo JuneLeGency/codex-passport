@@ -18,26 +18,26 @@ class Routing:
 
     def view(self):
         with self.lock:
-            if self.owner == 'desktop' and self.clock() > self.deadline:
+            if self.owner in ('desktop', 'wifi') and self.clock() > self.deadline:
                 self.owner, self.state = 'phone', 'fallback'
                 self.generation += 1
             return dict(owner=self.owner, state=self.state,
                         desktopAvailable=self.desktop, generation=self.generation)
 
     def select(self, owner):
-        if owner not in ('phone', 'desktop') or (owner == 'desktop' and not self.desktop):
+        if owner not in ('phone', 'desktop', 'wifi') or (owner == 'desktop' and not self.desktop):
             raise ValueError('Desktop BLE is not configured' if owner == 'desktop' else 'Invalid route')
         with self.lock:
             self.owner = owner
-            self.state = 'connecting' if owner == 'desktop' else 'idle'
-            self.deadline = self.clock() + 180
+            self.state = 'connecting' if owner != 'phone' else 'idle'
+            self.deadline = self.clock() + (45 if owner == 'wifi' else 180)
             self.generation += 1
         return self.view()
 
     def acknowledged(self, generation):
         with self.lock:
-            if generation == self.generation and self.owner == 'desktop':
-                self.state, self.deadline = 'connected', self.clock() + 60
+            if generation == self.generation and self.owner in ('desktop', 'wifi'):
+                self.state, self.deadline = 'connected', self.clock() + (30 if self.owner == 'wifi' else 60)
 
     def failed(self, generation):
         with self.lock:

@@ -25,5 +25,17 @@ int main(void) {
     assert(passport_pace(&window,9000,&pace));assert(pace.used==75 && pace.elapsed==50 && pace.speed==1);
     window.remaining=80;assert(passport_pace(&window,9000,&pace) && pace.speed==-1);
     assert(!passport_pace(&window,12000,&pace));assert(!passport_pace(&window,5999,&pace));
+    snprintf(line,sizeof(line),"%.*s,\"cmd\":{\"id\":12,\"op\":\"settings\",\"brightness\":25,\"idle\":30,\"volume\":35,\"muted\":true}}",(int)strlen(valid)-1,valid);
+    assert(passport_parse(line,strlen(line),&s));assert(s.command.kind==COMMAND_SETTINGS && s.command.muted && s.command.brightness==25);
+    p=strstr(line,"\"brightness\":25");p[13]='9';
+    assert(!passport_parse(line,strlen(line),&s));
+    snprintf(line,sizeof(line),"%.*s,\"cmd\":{\"id\":13,\"op\":\"wifi\",\"enabled\":true,\"saved\":true}}",(int)strlen(valid)-1,valid);
+    assert(passport_parse(line,strlen(line),&s));assert(s.command.kind==COMMAND_WIFI && s.command.saved);
+    snprintf(line,sizeof(line),"%.*s,\"cmd\":{\"id\":13,\"op\":\"erase_bonds\"}}",(int)strlen(valid)-1,valid);
+    assert(!passport_parse(line,strlen(line),&s));
+    assert(passport_private_endpoint("http://192.168.1.3:18765"));
+    assert(passport_private_endpoint("http://10.0.0.1:80"));
+    const char *bad[]={"http://010.0.0.1:80","http://8.8.8.8:80","http://127.0.0.1:80","http://10.0.0.1:80/x","http://user@10.0.0.1:80","http://10.0.0.1:99999","http://10.0.0.1:00080","https://10.0.0.1:80"};
+    for(unsigned i=0;i<sizeof(bad)/sizeof(bad[0]);++i)assert(!passport_private_endpoint(bad[i]));
     puts("Protocol validation: PASS");
 }

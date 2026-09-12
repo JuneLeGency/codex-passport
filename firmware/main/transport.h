@@ -10,3 +10,5 @@ int passport_ble_passkey(void);
 
 void passport_ble_tick(void);
 void passport_ble_reconnect(void);
+bool passport_ble_pause(void);
+void passport_ble_resume(void);

@@ -77,3 +77,39 @@ flash dumps, relay databases, access tokens, private transcripts or personal scr
 - Four real-device transitions (computer → phone → computer → phone) again delivered matching
   device event receipts with the new progress payload. The initial computer delivery waited behind
   an existing queue; this is not a latency benchmark. The final route was restored to phone forwarding.
+
+## 0.2.1 development firmware: sound and hardware checks
+
+- Firmware builds with warning-as-error application compilation and fits the existing factory partition. Python regression suite: 22 tests passed. Native controls and alert-policy tests passed (baseline, replay, batches, cooldown, mute, read suppression and quiet lifecycle updates).
+- Short chimes played on the physical speaker; the user confirmed hearing them. Three playback cycles completed; subsequent cycles returned to the same free-heap value. The worker creates only a DAC/TX path and releases audio resources after playback.
+- Restored notification firmware received new synthetic event ACKs over computer BLE and phone BLE; final route is phone. Wireless ADB was unavailable, so phone delivery was checked by actual device receipt, not by assuming an Android UI state.
+- Double-OK mute is covered by native event-sequence tests, including a double press that starts asleep. The user subsequently verified double OK on the 0.3.0 development firmware: the speaker icon changed and unread notifications were retained. This development firmware is not a published release.
+- Wi-Fi, microphone, battery, backlight and NVS results and their limits are recorded in [the hardware check report](HARDWARE_CHECKS.zh_CN.md). Wi-Fi credentials are excluded from both source and notification firmware; temporary credential-bearing probe artifacts were removed after restoration.
+
+## 0.3.0 interaction ordering
+
+- 33 Python tests passed, including six interaction-ordering regressions. Phone inbox and
+  Passport progress are ordered by visible conversation activity, independently of lifecycle status.
+- Tests cover new messages, background tool/status updates, duplicate hooks, older records,
+  deterministic ties, restarts, incremental messages and bounded backward history indexing.
+- The LAN-only relay was restarted with the change. Existing history indexing completed;
+  the live API and test phone contain descending interaction timestamps. A fresh physical
+  Passport receipt was observed through phone BLE after deployment.
+- The setup command was tested with an isolated state directory: private host selection, generated token file permissions, displayed pairing details and relay startup.
+
+## 0.3.0 quiet settings, onboarding and Wi-Fi
+
+- Native control, protocol and alert-policy tests pass. Only input/approval requests qualify for sound or waking; chimes are at least 120 seconds apart. Boot baselines, replay, coalesced batches, mute, read receipts and ordinary lifecycle events do not replay sounds.
+- The user confirmed physical double OK changes the mute icon without clearing unread notifications. Existing two-page and wake-only controls retain their earlier physical acceptance.
+- The Android onboarding flow was completed on the test phone, including an authenticated computer check, actual phone BLE receipt, button guide and completion. Device preferences were applied through the UI and acknowledged by Passport. Updated APK build and installation passed.
+- Wi-Fi provisioning from Android produced actual device HTTP receipts. Device restart restored Wi-Fi and preferences. Wi-Fi settings writes and Wi-Fi/computer BLE/phone BLE transitions each received physical acknowledgements, including returning to a previously saved network.
+- An intentionally unreachable private relay port induced real Wi-Fi synchronization failure. Passport automatically returned to paired phone BLE. The correct network and relay were restored, verified, then the route was returned to phone forwarding.
+- Battery endurance, RF range and off-LAN WireGuard remain excluded from this acceptance. No microphone capture is enabled in the notification firmware.
+
+- The final 0.3.0 firmware was flashed to the app partition only and verified by checksum.
+  Both full display pages were captured as 16 streamed display tiles using synthetic data;
+  the large arcs, percentage and CJK labels were visually inspected. The diagnostic capture
+  uses the existing display buffer, avoiding incomplete large-object snapshots under low memory.
+- The actual wheel passed all 33 tests in an isolated installation. Source, unpacked Python
+  archives, APK contents and firmware were checked against real private credentials, personal
+  device/network identifiers and private paths; no matches were found.

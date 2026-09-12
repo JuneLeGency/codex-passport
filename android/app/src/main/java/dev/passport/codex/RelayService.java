@@ -63,33 +63,9 @@ public class RelayService extends Service {
         return START_STICKY;
     }
     private JSONObject request(String path,JSONObject body) throws Exception {
-        URL url=new URL(base+path);
-        // Plain HTTP is accepted only for private/local VPN destinations, never public hosts.
-        if(!url.getProtocol().equals("https")) {
-            InetAddress address=InetAddress.getByName(url.getHost());
-            byte[] b=address.getAddress();
-            boolean tail=b.length==4 && (b[0]&255)==100 && (b[1]&255)>=64 && (b[1]&255)<=127;
-            boolean ula=b.length==16 && ((b[0]&0xfe)==0xfc);
-            if(!url.getProtocol().equals("http") || !(address.isSiteLocalAddress()||address.isLoopbackAddress()||tail||ula)) throw new IOException("Private VPN address required");
-        }
-        if(auth.length()<20) throw new IOException("Pairing token missing");
-        HttpURLConnection c=(HttpURLConnection)url.openConnection();
-        c.setConnectTimeout(5000); c.setReadTimeout(5000); c.setInstanceFollowRedirects(false);
-        c.setRequestProperty("Authorization","Bearer "+auth);
-        try {
-            if(body!=null) {
-                c.setRequestMethod("POST"); c.setDoOutput(true); c.setRequestProperty("Content-Type","application/json");
-                try(OutputStream out=c.getOutputStream()) {out.write(body.toString().getBytes(StandardCharsets.UTF_8));}
-            }
-            if(c.getResponseCode()!=200) throw new IOException("Relay HTTP "+c.getResponseCode());
-            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-            try(InputStream in=c.getInputStream()) {
-                byte[] buf=new byte[1024]; int count;
-                while((count=in.read(buf))!=-1) {bytes.write(buf,0,count);if(bytes.size()>8192) throw new IOException("Oversized relay response");}
-            }
-            return new JSONObject(bytes.toString("UTF-8"));
-        } finally {c.disconnect();}
+        return RelayClient.request(base,auth,path,body);
     }
+
     private static String kindLabel(String kind) {
         switch(kind) {
             case "completed": return "已完成";
@@ -103,6 +79,11 @@ public class RelayService extends Service {
     private void poll() {
         if(stopped) return;
         try {
+            String deviceReceipt=prefs.getString("deviceReceipt","");
+            if(!deviceReceipt.isEmpty()) {
+                request("/v1/ack",new JSONObject(deviceReceipt));
+                synchronized(this){if(prefs.getString("deviceReceipt","").equals(deviceReceipt))prefs.edit().remove("deviceReceipt").apply();}
+            }
             long event=prefs.getLong("ackEvent",0), read=prefs.getLong("ackRead",0);
             if(event>0||read>0) {
                 request("/v1/ack",new JSONObject().put("event",event).put("read",read));
@@ -122,9 +103,13 @@ public class RelayService extends Service {
             JSONObject snapshot=request("/v1/snapshot",null);
             lastNetwork=SystemClock.elapsedRealtime();
             JSONObject link=snapshot.optJSONObject("_link");
-            boolean direct=link!=null&&link.optString("owner").equals("desktop");
+            String owner=link==null?"phone":link.optString("owner","phone");
+            boolean direct=!owner.equals("phone");
+            JSONObject device=snapshot.optJSONObject("_device");
+            prefs.edit().putString("deviceState",device==null?"{}":device.toString()).putLong("relayAt",System.currentTimeMillis()).putString("routeOwner",owner).apply();
+            snapshot.remove("_device");
             String directState=link==null?"":link.optString("state");
-            prefs.edit().putBoolean("desktopAvailable",link!=null&&link.optBoolean("desktopAvailable")).putBoolean("desktopOwns",direct).apply();
+            prefs.edit().putString("routeState",directState).putBoolean("desktopAvailable",link!=null&&link.optBoolean("desktopAvailable")).putBoolean("desktopOwns",owner.equals("desktop")).apply();
             snapshot.remove("_link");
             JSONArray recent=snapshot.optJSONArray("recent");
             StringBuilder lines=new StringBuilder();
@@ -135,17 +120,18 @@ public class RelayService extends Service {
                 if(!body.isEmpty())lines.append(body).append("\n");
                 lines.append("\n");
             }
-            JSONObject display=new JSONObject(snapshot.toString());display.remove("seq");display.remove("now");
+            JSONObject display=new JSONObject(snapshot.toString());display.remove("seq");display.remove("now");display.remove("cmd");
             prefs.edit().putString("inbox",lines.toString()).putString("snapshot",display.toString()).putLong("snapshotAt",System.currentTimeMillis()).apply();
             handler.post(()->{
                 desktopOwns=direct;
                 if(direct) {
                     stopScan();disconnect();
-                    status(directState.equals("connected")?"同步正常 · 电脑蓝牙直连 Passport":"正在切换到电脑蓝牙 · 失败后自动回到手机");
+                    status(directState.equals("connected")?(owner.equals("wifi")?"同步正常 · Wi-Fi 直连 Passport":"同步正常 · 电脑蓝牙直连 Passport"):
+                        owner.equals("wifi")?"Passport 正在连接 Wi-Fi · 失败后回到手机":"正在切换到电脑蓝牙 · 失败后自动回到手机");
                 } else {sendSnapshot(snapshot);ensureBle();}
             });
         } catch(Exception error) {
-            status("电脑 未连接 · 请检查 WireGuard / 地址 / 密钥");
+            status("电脑未连接 · 请检查 WireGuard、地址和密钥");
             handler.post(()->{
                 desktopOwns=false;
                 if(SystemClock.elapsedRealtime()-lastNetwork>15000){stopScan();disconnect();}
@@ -247,6 +233,7 @@ public class RelayService extends Service {
             JSONObject comparable=new JSONObject(data.toString());comparable.remove("seq");comparable.remove("now");
             String sig=comparable.toString();
             if(sig.equals(signature)&&SystemClock.elapsedRealtime()-sentAt<10000)return;
+            while(recent.length()>0 && data.toString().getBytes(StandardCharsets.UTF_8).length>1900)recent.remove(recent.length()-1);
             byte[] frame=(data.toString()+"\n").getBytes(StandardCharsets.UTF_8);
             if(frame.length>2048)return;
             pendingSeq=data.getInt("seq");pendingEvent=data.optJSONObject("event")==null?0:data.getJSONObject("event").optInt("id");
@@ -268,6 +255,7 @@ public class RelayService extends Service {
             try {
                 JSONObject reply=new JSONObject(line);
                 if(reply.optInt("v")!=1)continue;
+                if(reply.has("device"))synchronized(this){prefs.edit().putString("deviceReceipt",reply.toString()).apply();}
                 if(reply.optInt("ack")==pendingSeq&&pendingSeq!=0&&reply.optInt("event")==pendingEvent) {
                     synchronized(this){if(pendingEvent>0)prefs.edit().putLong("ackEvent",pendingEvent).apply();}
                     pendingSeq=0;pendingEvent=0;if(wake.isHeld())wake.release();

@@ -82,13 +82,15 @@ public class MainActivity extends AppCompatActivity {
         ViewCompat.setOnApplyWindowInsetsListener(root,(v,insets)->{Insets i=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.ime());v.setPadding(i.left,i.top,i.right,i.bottom);return insets;});
         scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);scroll.setVerticalScrollBarEnabled(false);
         content=column();content.setFocusableInTouchMode(true);content.setDescendantFocusability(ViewGroup.FOCUS_BEFORE_DESCENDANTS);content.setPadding(dp(22),dp(16),dp(22),dp(16));scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        navigation=new BottomNavigationView(this);navigation.setBackgroundColor(color(R.color.surface));navigation.setElevation(0);
+        navigation=new BottomNavigationView(this);navigation.setBackgroundColor(color(R.color.surface));navigation.setElevation(0);navigation.setLabelVisibilityMode(com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_LABELED);
         navigation.getMenu().add(0,1,0,"概览").setIcon(R.drawable.ic_home);
         navigation.getMenu().add(0,2,1,"通知").setIcon(R.drawable.ic_inbox);
-        navigation.getMenu().add(0,3,2,"连接").setIcon(R.drawable.ic_link);
+        navigation.getMenu().add(0,4,2,"设备").setIcon(R.drawable.ic_passport);
+        navigation.getMenu().add(0,3,3,"连接").setIcon(R.drawable.ic_link);
         navigation.setOnItemReselectedListener(item->scroll.smoothScrollTo(0,0));
-        navigation.setOnItemSelectedListener(item->{page=item.getItemId();rendered="";render();scroll.smoothScrollTo(0,0);return true;});root.addView(navigation,box(-1,-2));
+        navigation.setOnItemSelectedListener(item->{if(item.getItemId()==4){startActivity(new Intent(this,DeviceActivity.class));return false;}page=item.getItemId();rendered="";render();scroll.smoothScrollTo(0,0);return true;});root.addView(navigation,box(-1,-2));
         if(saved!=null)page=saved.getInt("page",1);navigation.setSelectedItemId(page);update();
+        if(saved==null&&prefs.getString("endpoint","").isEmpty()&&!prefs.getBoolean("setupComplete",false))startActivity(new Intent(this,GuideActivity.class));
     }
     private void provision(){
         File f=new File(getFilesDir(),"relay.json");if(!f.exists()||f.length()>8192)return;
@@ -103,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
         long age=System.currentTimeMillis()-prefs.getLong("statusAt",0);
         statusMessage=age>30000?"连接尚未就绪":prefs.getString("status","尚未连接");
         connected=age<30000&&statusMessage.startsWith("同步正常");
-        String sig=page+raw+statusMessage+(System.currentTimeMillis()/60000);
+        String sig=page+raw+statusMessage+prefs.getBoolean("setupComplete",false)+(System.currentTimeMillis()/60000);
         if(!sig.equals(rendered)&&page!=3){rendered=sig;int y=scroll.getScrollY();render();scroll.post(()->scroll.scrollTo(0,y));}
         int unread=data.optInt("unread");
         if(unread>0){navigation.getOrCreateBadge(2).setNumber(unread);}else navigation.removeBadge(2);
@@ -115,11 +117,17 @@ public class MainActivity extends AppCompatActivity {
         if(page==3){connectionPage();return;}
         if(page==2){heading("你的通知","只保留需要你关注的进展");notices(4);return;}
         heading("随身工作台","重要进展，随身可见。");
+        if(!prefs.getBoolean("setupComplete",false)){
+            LinearLayout setup=inside(card(content,color(R.color.container),28),20);
+            setup.addView(text("连接好，才能随身看",20,color(R.color.on_surface),true));gap(setup,10);
+            setup.addView(text("入门指南会带你完成电脑连接、设备配对和首次同步。",14,color(R.color.on_variant),false));gap(setup,14);
+            MaterialButton guide=button("继续入门设置",R.drawable.ic_arrow,true);guide.setOnClickListener(v->startActivity(new Intent(this,GuideActivity.class)));setup.addView(guide);
+        }
         LinearLayout hero=inside(card(content,color(R.color.primary_container),32),22);
         LinearLayout label=row();label.addView(tag(connected?"●  已连接":"○  未连接",color(R.color.surface),color(R.color.primary)),box(-2,-2));
         TextView name=text("AI Passport",14,color(R.color.on_primary_container),true);name.setGravity(Gravity.END);label.addView(name,new LinearLayout.LayoutParams(0,-2,1));hero.addView(label);gap(hero,18);
         hero.addView(text(connected?"进展已在身边":"让进展跟上你",28,color(R.color.on_primary_container),true));gap(hero,8);
-        hero.addView(text(connected?(prefs.getBoolean("desktopOwns",false)?"电脑正在通过蓝牙同步到 Passport":"手机正在将通知同步到 Passport"):statusMessage==null?"连接后自动同步通知与用量":statusMessage,14,color(R.color.on_primary_container),false));gap(hero,20);
+        hero.addView(text(connected?(prefs.getString("routeOwner","phone").equals("wifi")?"Passport 正在通过 Wi-Fi 从电脑接收进展":prefs.getBoolean("desktopOwns",false)?"电脑正在通过蓝牙同步到 Passport":"手机正在将通知同步到 Passport"):statusMessage==null?"连接后自动同步通知与用量":statusMessage,14,color(R.color.on_primary_container),false));gap(hero,20);
         MaterialButton connect=button(connected?"暂停手机同步":"连接 Passport",connected?R.drawable.ic_pause:R.drawable.ic_arrow,true);
         connect.setOnClickListener(v->{if(connected)pause();else requestConnect();});hero.addView(connect);
         LinearLayout metrics=row();metric(metrics,data.optInt("running"),"正在进行",false);metric(metrics,data.optInt("waiting"),"等待回复",true);content.addView(metrics);gap(content,20);
@@ -192,17 +200,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     private void connectionPage(){
-        heading("保持连接","手机与 Passport 在一起，就能接收进展。");
+        heading("保持连接","选择适合当前位置的连接方式。");
+        MaterialButton guide=button("查看入门指南",R.drawable.ic_arrow,false);guide.setOnClickListener(v->startActivity(new Intent(this,GuideActivity.class).putExtra("step",0)));content.addView(guide);gap(content,18);
         LinearLayout route=inside(card(content,color(R.color.primary_container),28),22);
-        route.addView(text(prefs.getBoolean("desktopOwns",false)?"电脑  →  Passport":"电脑  →  手机  →  Passport",19,color(R.color.on_primary_container),true));gap(route,10);
+        route.addView(text(prefs.getString("routeOwner","phone").equals("wifi")?"电脑  →  Wi-Fi  →  Passport":prefs.getBoolean("desktopOwns",false)?"电脑  →  Passport":"电脑  →  手机  →  Passport",19,color(R.color.on_primary_container),true));gap(route,10);
         route.addView(text("离开家时，先开启你已配置的 WireGuard。手机通过蓝牙连接 Passport。",14,color(R.color.on_primary_container),false));
-        gap(content,12);content.addView(text("电脑 中继",20,color(R.color.on_surface),true));gap(content,14);
+        gap(content,12);content.addView(text("电脑中继",20,color(R.color.on_surface),true));gap(content,14);
         endpoint=input("中继地址",prefs.getString("endpoint",""),false);
         token=input("配对密钥",prefs.getString("token",""),true);gap(content,12);
         MaterialButton save=button("保存并连接",R.drawable.ic_link,true);save.setOnClickListener(v->{
             String url=endpoint.getText().toString().trim(),secret=token.getText().toString().trim();
             if(!url.startsWith("http://")&&!url.startsWith("https://")){endpoint.setError("请输入完整的 HTTP 或 HTTPS 地址");return;}
-            if(secret.length()<20){token.setError("请填写 电脑 中继生成的配对密钥");return;}
+            if(secret.length()<20){token.setError("请填写电脑中继生成的配对密钥");return;}
             prefs.edit().putString("endpoint",url).putString("token",secret).apply();stopService(new Intent(this,RelayService.class));requestConnect();navigation.setSelectedItemId(1);
         });content.addView(save);gap(content,12);
         MaterialButton stop=button("停止手机同步",R.drawable.ic_pause,false);stop.setOnClickListener(v->pause());content.addView(stop);gap(content,24);
@@ -216,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(text("首次连接",18,color(R.color.on_surface),true));gap(content,8);
         content.addView(text("将两台设备放在一起，在手机系统弹窗输入 Passport 屏幕上的六位配对码。",14,color(R.color.on_variant),false));gap(content,20);
         content.addView(text("Passport 图例",18,color(R.color.on_surface),true));gap(content,8);
-        content.addView(text("外环：剩余额度 · 内环：剩余时间\n橙色：用得偏快 · 绿色：均衡 · 蓝色：偏慢\n▶ 进行中 · △ 待回复 · 铃铛：未读\n短按上/下切页，长按上/下切周期。\nOK 标为已读；进展页显示最近三个会话。\n熄屏后首次按键只唤醒；长按 OK 重连蓝牙。",14,color(R.color.on_variant),false));gap(content,20);
+        content.addView(text("外环：剩余额度 · 内环：剩余时间\n橙色：用得偏快 · 绿色：均衡 · 蓝色：偏慢\n▶ 进行中 · △ 待回复 · 铃铛：未读\n短按上/下切页，长按上/下切周期。\nOK 标为已读；进展页显示最近三个会话。\n熄屏后首次按键只唤醒；长按 OK 重连蓝牙。\n新版固件双击 OK 静音；声音和屏幕偏好在「设备」调整。",14,color(R.color.on_variant),false));gap(content,20);
         content.addView(text("后台接收",18,color(R.color.on_surface),true));gap(content,8);
         content.addView(text("持续同步时，系统会显示一条常驻通知。若手机限制后台运行，可在应用电池设置中允许后台活动。",14,color(R.color.on_variant),false));
     }

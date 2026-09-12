@@ -16,6 +16,11 @@
 #include "protocol.h"
 #include "transport.h"
 #include "controls.h"
+#include "alert_policy.h"
+#include "sound.h"
+#include "preferences.h"
+#include "wifi_link.h"
+#include "esp_app_desc.h"
 
 
 /* Only this task owns application state; all LVGL access uses the BSP mutex. */
@@ -24,9 +29,12 @@ static passport_snapshot_t state;
 static uint64_t received_ms, interaction_ms;
 static bool dimmed;
 static control_state_t controls;
+static alert_policy_t alerts;
 typedef struct { int key, event; } key_event_t;
 
 static uint32_t seen_event, read_through;
+static uint32_t last_command;
+static bool command_ok;
 static int page, window_index, battery=-1;
 typedef struct {
     lv_obj_t *screen, *connection, *battery_label, *amount, *window_label, *reset_label;
@@ -178,7 +186,8 @@ static void render(uint64_t now)
     ui=&views[page];
     if(lv_screen_active()!=ui->screen)lv_screen_load(ui->screen);
     bool live=received_ms && now-received_ms<30000;
-    lv_label_set_text(ui->connection,live?LV_SYMBOL_BLUETOOTH:LV_SYMBOL_CLOSE);
+    lv_label_set_text_fmt(ui->connection,"%s  %s",live?(state.via_wifi?LV_SYMBOL_WIFI:LV_SYMBOL_BLUETOOTH):LV_SYMBOL_CLOSE,
+                          passport_sound_muted()?LV_SYMBOL_MUTE:LV_SYMBOL_VOLUME_MID);
     lv_obj_set_style_text_color(ui->connection,lv_color_hex(live?GREEN:MUTED),0);
     if(battery<0)lv_label_set_text(ui->battery_label,LV_SYMBOL_BATTERY_EMPTY);
     else lv_label_set_text_fmt(ui->battery_label,"%s %d%%",battery>80?LV_SYMBOL_BATTERY_FULL:battery>60?LV_SYMBOL_BATTERY_3:battery>30?LV_SYMBOL_BATTERY_2:battery>10?LV_SYMBOL_BATTERY_1:LV_SYMBOL_BATTERY_EMPTY,battery);
@@ -249,36 +258,69 @@ static void ble_receive(const uint8_t *bytes,size_t size)
 static void respond(const char *data)
 {
     passport_ble_send(data);
+    if(state.via_wifi)passport_wifi_ack(data);
     fputs(data,stdout);
 }
-static void capture_tile(lv_obj_t *obj)
+static void receipt(bool frame)
 {
-    if(lv_obj_has_flag(obj,LV_OBJ_FLAG_HIDDEN))return;
-    lv_obj_update_layout(obj);
-    unsigned padding=16;
-    if(lv_obj_check_type(obj,&lv_label_class))padding+=lv_font_get_line_height(lv_obj_get_style_text_font(obj,0));
-    unsigned w=lv_obj_get_width(obj)+padding,h=lv_obj_get_height(obj)+padding;
-    uint32_t stride=lv_draw_buf_width_to_stride(w,LV_COLOR_FORMAT_RGB565);
-    size_t size=stride*h+64;
-    void *memory=malloc(size);if(!memory)return;
-    lv_draw_buf_t buf;
-    if(lv_draw_buf_init(&buf,w,h,LV_COLOR_FORMAT_RGB565,stride,memory,size)==LV_RESULT_OK &&
-       lv_snapshot_take_to_draw_buf(obj,LV_COLOR_FORMAT_RGB565,&buf)==LV_RESULT_OK) {
-        lv_area_t a;lv_obj_get_coords(obj,&a);
-        int x=a.x1-((int)buf.header.w-lv_obj_get_width(obj))/2;
-        int y=a.y1-((int)buf.header.h-lv_obj_get_height(obj))/2;
-        printf("TILE %d %d %u %u %u\n",x,y,(unsigned)buf.header.w,(unsigned)buf.header.h,(unsigned)buf.header.stride);
-        fwrite(buf.data,1,buf.header.stride*buf.header.h,stdout);printf("\n");
+    char reply[640];
+    snprintf(reply,sizeof(reply),"{\"v\":1,\"ack\":%" PRIu32 ",\"event\":%" PRIu32 ",\"read\":%" PRIu32
+        ",\"heap\":%" PRIu32 ",\"generation\":%" PRIu32 ",\"cmd\":%" PRIu32 ",\"cmd_ok\":%s,"
+        "\"device\":{\"fw\":\"%s\",\"battery\":%d,\"brightness\":%u,\"idle\":%u,\"volume\":%u,\"muted\":%s,\"wifi\":%u,\"configured\":%s}}\n",
+        frame?state.seq:0,frame?state.event.id:0,read_through,esp_get_free_heap_size(),state.generation,last_command,
+        command_ok?"true":"false",esp_app_get_description()->version,battery,passport_brightness_setting(),
+        passport_idle_seconds(),passport_sound_volume(),passport_sound_muted()?"true":"false",passport_wifi_state(),
+        passport_wifi_configured()?"true":"false");
+    respond(reply);
+}
+static bool wifi_receive(const char *json,size_t length)
+{
+    static passport_snapshot_t next;
+    if(!passport_parse(json,length,&next))return false;
+    next.via_wifi=true;
+    return xQueueSend(snapshots,&next,pdMS_TO_TICKS(100))==pdTRUE;
+}
+static void apply_command(uint64_t now)
+{
+    passport_command_t *cmd=&state.command;
+    if(cmd->id && cmd->id!=last_command) {
+        last_command=cmd->id;command_ok=false;
+        if(cmd->kind==COMMAND_SETTINGS) {
+            command_ok=passport_preferences_set(cmd->brightness,cmd->idle) && passport_sound_configure(cmd->muted,cmd->volume);
+        } else if(cmd->kind==COMMAND_IDENTIFY) {
+            interaction_ms=now;passport_sound_notify();command_ok=true;
+        } else if(cmd->kind==COMMAND_WIFI || cmd->kind==COMMAND_FORGET_WIFI)command_ok=passport_wifi_command(cmd);
     }
-    free(memory);
+    /* Never retain provisioning credentials in render state or diagnostic output. */
+    memset(cmd,0,sizeof(*cmd));
+}
+/* Stream the display's existing small draw tiles before the panel driver swaps bytes.
+ * Capturing the actual full refresh needs no second framebuffer or radio interruption. */
+static void capture_flush(lv_event_t *event)
+{
+    lv_display_t *display=lv_event_get_user_data(event);
+    const lv_area_t *area=lv_event_get_param(event);
+    lv_draw_buf_t *buffer=lv_display_get_buf_active(display);
+    unsigned width=lv_area_get_width(area),height=lv_area_get_height(area);
+    if(!buffer || buffer->header.cf!=LV_COLOR_FORMAT_RGB565 ||
+       buffer->header.stride*height>buffer->data_size) {
+        printf("PASSPORT_CAPTURE_ERROR buffer\n");return;
+    }
+    printf("TILE %d %d %u %u %u\n",(int)area->x1,(int)area->y1,width,height,(unsigned)buffer->header.stride);
+    fwrite(buffer->data,1,buffer->header.stride*height,stdout);printf("\n");
 }
 static void capture(void)
 {
+    lv_display_t *display=lv_display_get_default();
     printf("PASSPORT_TILES 240 320\n");
-    capture_tile(ui->quota_ring);capture_tile(ui->time_ring);
-    capture_tile(ui->connection);capture_tile(ui->battery_label);capture_tile(ui->amount);capture_tile(ui->window_label);capture_tile(ui->reset_label);
-    for(unsigned i=0;i<3;++i){capture_tile(ui->counts[i]);capture_tile(ui->cards[i]);}
-    for(unsigned i=0;i<2;++i)capture_tile(ui->dots[i]);
+    if(lv_display_get_render_mode(display)!=LV_DISPLAY_RENDER_MODE_PARTIAL) {
+        printf("PASSPORT_CAPTURE_ERROR mode\n");
+    } else {
+        lv_display_add_event_cb(display,capture_flush,LV_EVENT_FLUSH_START,display);
+        lv_obj_invalidate(lv_display_get_screen_active(display));
+        lv_refr_now(display);
+        lv_display_remove_event_cb_with_user_data(display,capture_flush,display);
+    }
     printf("PASSPORT_CAPTURE_END\n");
 }
 static void usb_task(void *context)
@@ -318,27 +360,40 @@ void app_main(void)
     bsp_display_backlight(55);
     interaction_ms=millis();
     passport_ble_start(ble_receive);
+    passport_sound_init();
+    passport_preferences_init();
+    passport_wifi_init(wifi_receive);
     ESP_ERROR_CHECK(bsp_button_init(on_button,NULL));
     if(xTaskCreate(usb_task,"passport_usb",8192,NULL,4,NULL)!=pdPASS) return;
     uint64_t last_battery=0, last_ui=0;
-    int last_pin=-2;
+    int last_pin=-2,last_brightness=-1;
     for(;;) {
         uint64_t now=millis();
         passport_ble_tick();
         bool updated=xQueueReceive(snapshots,&state,0)==pdTRUE;
         if(updated) {
             received_ms=now;
-            if(state.event.id>seen_event) { seen_event=state.event.id; interaction_ms=now; }
+            if(state.event.id>seen_event) {
+                seen_event=state.event.id;
+                if(alert_needs_attention(state.event.kind))interaction_ms=now;
+            }
+            apply_command(now);
         }
         key_event_t key;
         while(xQueueReceive(buttons,&key,0)==pdTRUE) {
             control_action_t action=control_event(&controls,key.key,key.event,dimmed);
             if(action!=CONTROL_NONE)interaction_ms=now;
-            if(action==CONTROL_READ) { read_through=state.latest; char reply[96]; snprintf(reply,sizeof(reply),"{\"v\":1,\"read\":%" PRIu32 "}\n",read_through); respond(reply); }
+            if(action==CONTROL_READ) { read_through=state.latest;receipt(false); }
             else if(action==CONTROL_PAGE)page=!page;
             else if(action==CONTROL_WINDOW)window_index=!window_index;
-            else if(action==CONTROL_RECONNECT)passport_ble_reconnect();
+            else if(action==CONTROL_RECONNECT) {
+                if(passport_wifi_state()>0 && passport_wifi_state()<4)passport_wifi_cancel();
+                else passport_ble_reconnect();
+            }
+            else if(action==CONTROL_MUTE){passport_sound_toggle();receipt(false);}
         }
+        if(updated && alert_policy_update(&alerts,&state,read_through,passport_sound_muted(),now))
+            passport_sound_notify();
         if(now-last_battery>10000 || battery<0) { battery=bsp_battery_soc(); last_battery=now; }
         int pin=passport_ble_passkey();
         if((updated || now-last_ui>=5000 || now-interaction_ms<200 || pin!=last_pin || uxQueueMessagesWaiting(captures)) && bsp_lvgl_lock(1000)) {
@@ -353,9 +408,12 @@ void app_main(void)
             }
             bsp_lvgl_unlock();
         }
-        if(updated) { char reply[160]; snprintf(reply,sizeof(reply),"{\"v\":1,\"ack\":%" PRIu32 ",\"event\":%" PRIu32 ",\"read\":%" PRIu32 ",\"heap\":%" PRIu32 "}\n",state.seq,state.event.id,read_through,esp_get_free_heap_size()); respond(reply); }
-        bool idle=now-interaction_ms>60000;
-        if(idle!=dimmed) { dimmed=idle; bsp_display_backlight(idle?0:55); }
+        if(updated)receipt(true);
+        unsigned idle_seconds=passport_idle_seconds();
+        if(battery>=0 && battery<=10 && idle_seconds>30)idle_seconds=30;
+        dimmed=now-interaction_ms>idle_seconds*1000ULL;
+        int brightness=dimmed?0:(int)passport_brightness(battery);
+        if(brightness!=last_brightness){bsp_display_backlight(brightness);last_brightness=brightness;}
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

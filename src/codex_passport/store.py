@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import json
+import math
 import sqlite3
 import time
 from pathlib import Path
@@ -39,6 +40,7 @@ class Store:
           CREATE TABLE IF NOT EXISTS waits(thread TEXT, turn TEXT, identity TEXT,
               PRIMARY KEY(thread,turn,identity));
           CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT);
+          CREATE TABLE IF NOT EXISTS interactions(thread TEXT PRIMARY KEY, ts REAL NOT NULL);
           CREATE INDEX IF NOT EXISTS events_thread_id ON events(thread,id);
         ''')
         columns={r[1] for r in self.db.execute('PRAGMA table_info(events)')}
@@ -54,6 +56,16 @@ class Store:
         self.db.execute('DELETE FROM events WHERE thread=?',(thread,))
         self.db.execute('DELETE FROM sessions WHERE thread=?',(thread,))
         self.db.execute('DELETE FROM waits WHERE thread=?',(thread,))
+        self.db.execute('DELETE FROM interactions WHERE thread=?',(thread,))
+        self.db.commit()
+
+    def interaction(self, thread, ts):
+        """Index real conversation activity independently of lifecycle updates."""
+        if not thread or not isinstance(ts, (int, float)) or not math.isfinite(ts) or ts <= 0:
+            return
+        self.db.execute('''INSERT INTO interactions VALUES(?,?)
+            ON CONFLICT(thread) DO UPDATE SET ts=excluded.ts
+            WHERE excluded.ts>interactions.ts''', (thread, ts))
         self.db.commit()
 
     def decorate(self, thread, title='', body=''):
@@ -76,7 +88,7 @@ class Store:
         self.db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)', (key, json.dumps(value)))
         self.db.commit()
 
-    def event(self, thread, turn, kind, project='', identity='', ts=None, silent=False):
+    def event(self, thread, turn, kind, project='', identity='', ts=None, silent=False, interaction=False):
         if kind not in LABELS or not thread:
             return
         ts = time.time() if ts is None else ts
@@ -101,8 +113,10 @@ class Store:
                             (thread, turn, status, project, ts))
         if not silent:
             quiet = int(kind not in ALERT_KINDS)
-            self.db.execute('INSERT OR IGNORE INTO events(key,thread,kind,project,ts,delivered,read) VALUES(?,?,?,?,?,?,?)',
+            inserted = self.db.execute('INSERT OR IGNORE INTO events(key,thread,kind,project,ts,delivered,read) VALUES(?,?,?,?,?,?,?)',
                             (key, thread, kind, project, ts, quiet, quiet))
+            if interaction and inserted.rowcount:
+                self.interaction(thread, ts)
         self.db.commit()
 
     def resume(self, thread, turn='', project='', identity=''):
@@ -159,8 +173,10 @@ class Store:
                 json.dumps(value.get('tool_input', {}), sort_keys=True).encode()).hexdigest())
         if kind in ('session', 'closed'):
             identity = str(int(time.time()) // 5)
-        self.event(thread, turn, kind, project, identity)
         body=value.get('last_assistant_message') or value.get('last-assistant-message') or ''
+        self.event(thread, turn, kind, project, identity,
+                   interaction=event == 'UserPromptSubmit' or kind in ('approval', 'input') or
+                   (event in ('Stop', 'agent-turn-complete') and bool(body)))
         if kind=='input':
             tool_input=value.get('tool_input')
             questions=tool_input.get('questions',[]) if isinstance(tool_input,dict) else []
@@ -190,18 +206,24 @@ class Store:
 
     def inbox(self, limit=4):
         return [dict(r) for r in self.db.execute(
-            "SELECT * FROM events WHERE id IN (SELECT max(id) FROM events WHERE kind IN ('completed','failed','interrupted','approval','input') GROUP BY thread) ORDER BY id DESC LIMIT ?",(limit,))]
+            '''SELECT e.* FROM events e LEFT JOIN interactions a ON a.thread=e.thread
+               WHERE e.id IN (SELECT max(id) FROM events WHERE kind IN
+                 ('completed','failed','interrupted','approval','input') GROUP BY thread)
+               ORDER BY coalesce(a.ts,(SELECT min(ts) FROM events WHERE thread=e.thread)) DESC,
+                        e.thread ASC LIMIT ?''',(limit,))]
 
     def progress(self, limit=3):
         """Recent visible sessions, with current state rather than an old alert's state."""
         rows = self.db.execute('''
             SELECT s.*, e.id, e.kind AS event_kind, e.body,
+              coalesce(a.ts,(SELECT min(ts) FROM events WHERE thread=s.thread),s.updated) AS interaction_ts,
               (SELECT title FROM events WHERE thread=s.thread AND title!='' ORDER BY id DESC LIMIT 1) AS title
             FROM sessions s JOIN events e ON e.id=(SELECT max(id) FROM events WHERE thread=s.thread)
+            LEFT JOIN interactions a ON a.thread=s.thread
             WHERE s.updated>? AND s.status NOT IN ('closed','idle','session')
-            ORDER BY s.updated DESC, e.id DESC LIMIT ?
+            ORDER BY interaction_ts DESC, s.thread ASC LIMIT ?
         ''', (time.time()-86400, max(0, min(limit, 3))))
-        return [dict(id=r['id'], kind=r['status'], project=r['project'], ts=r['updated'],
+        return [dict(id=r['id'], kind=r['status'], project=r['project'], ts=r['interaction_ts'],
                      title=r['title'] or r['project'],
                      body=clipped(r['body'],90) if r['status']==r['event_kind'] and
                      r['status'] in ALERT_KINDS else '') for r in rows]

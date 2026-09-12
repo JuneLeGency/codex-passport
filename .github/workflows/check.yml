@@ -13,3 +13,4 @@ jobs:
       - run: python -m pip install .
       - run: python -m unittest discover -s tests -v
       - run: cc -Wall -Wextra -Werror tests/test_controls.c firmware/main/controls.c -o /tmp/test_controls && /tmp/test_controls
+      - run: cc -Wall -Wextra -Werror tests/test_alert_policy.c firmware/main/alert_policy.c -o /tmp/test_alert_policy && /tmp/test_alert_policy

@@ -1,7 +1,7 @@
 # Build and development
 
 End users can use the [step-by-step guide](GETTING_STARTED.zh_CN.md) and download the APK/firmware.
-This page is for rebuilding them. Version 0.2.0 adds the device progress page and bounded thread summaries over BLE; update all three components together.
+This page is for rebuilding them. Version 0.3.0 adds quiet alerts, device settings, Wi-Fi handoff, onboarding and interaction ordering; update all three components together.
 
 ## Python
 
@@ -9,7 +9,7 @@ This page is for rebuilding them. Version 0.2.0 adds the device progress page an
 uv sync --extra ble
 uv run python -m unittest discover -s tests -v
 uv build --no-sources
-uvx --from ./dist/codex_passport_sync-0.2.0-py3-none-any.whl codex-passport --help
+uvx --from ./dist/codex_passport_sync-0.3.0-py3-none-any.whl codex-passport --help
 ```
 
 Python 3.10+. Tests require local socket access. `src/`, CLI commands and protocol are independently authored.
@@ -27,7 +27,7 @@ gradle -p android --no-daemon assembleDebug
 ```
 
 Output: `android/app/build/outputs/apk/debug/app-debug.apk`. Package: `dev.passport.codex`.
-The published 0.2.0 APK uses a debug signature. A locally built APK may have a different signing key and cannot necessarily replace an installed APK without uninstalling it; that would remove its saved relay settings.
+The published 0.3.0 APK uses a debug signature. A locally built APK may have a different signing key and cannot necessarily replace an installed APK without uninstalling it; that would remove its saved relay settings.
 Published APK installation does not require ADB. Developers can install to an explicitly selected device with `adb -s DEVICE install -r PATH_TO_APK`.
 
 ## Firmware
@@ -42,7 +42,7 @@ idf.py -C firmware build
 ```
 
 The fetched checkout is ignored under `upstream/ai-passport`. CMake references its official BSP; the application under `firmware/main/` is original.
-Output: `firmware/build/codex-passport.bin`.
+Output: `firmware/build/codex-passport.bin`. The full CJK bitmap is losslessly compressed; `CONFIG_LV_USE_FONT_COMPRESSED=y` and size optimization are required to fit the 3 MB factory partition. Keep the supplied Wi-Fi buffer sizes and 8 KB system event task stack. BLE and Wi-Fi hand off the controller rather than running concurrently.
 Only flash the application at `0x10000` on the documented official layout, preserving bootloader, partitions, NVS, cardid and Recovery.
 See the backup and flashing steps in the beginner guide. Do not substitute a full erase or a combined image.
 
@@ -51,13 +51,15 @@ See the backup and flashing steps in the beginner guide. Do not substitute a ful
 ```sh
 cc -Wall -Wextra -Werror tests/test_controls.c firmware/main/controls.c -o /tmp/passport-controls
 /tmp/passport-controls
+cc -Wall -Wextra -Werror tests/test_alert_policy.c firmware/main/alert_policy.c -o /tmp/passport-alert-policy
+/tmp/passport-alert-policy
 javac -d /tmp/passport-pace android/app/src/main/java/dev/passport/codex/UsagePace.java tests/UsagePaceTest.java
 java -cp /tmp/passport-pace UsagePaceTest
 ```
 
 `tests/test_protocol.c` additionally needs cJSON headers/library; IDF builds use its bundled cJSON component.
 GitHub Actions runs Python and native control tests. Manual physical-button acceptance and BLE delivery evidence are recorded separately in [VALIDATION.md](VALIDATION.md).
-USB screenshot tooling is in `scripts/capture_device.py`; it requires an explicit `--port`. Use `--fixture synthetic.json --page 0` or `--page 1` to render and capture a synthetic snapshot on one USB connection. The diagnostic page selection is temporary and does not mark notifications read. Use synthetic data before sharing screenshots.
+USB screenshot tooling is in `scripts/capture_device.py`; it requires an explicit `--port`. Use `--fixture synthetic.json --page 0` or `--page 1` to render and capture a synthetic snapshot on one USB connection. The diagnostic page selection is temporary and does not mark notifications read. USB capture streams a full refresh from the existing 20-line display buffer using LVGL flush events, without allocating another framebuffer or interrupting the radio. Capture errors are reported instead of silently generating partial images. Use synthetic data before sharing screenshots.
 
 ## Release procedure
 

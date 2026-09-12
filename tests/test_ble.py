@@ -68,7 +68,7 @@ class ProgressTests(unittest.TestCase):
             for i in range(5):
                 store.event(str(i),'first','completed')
                 store.decorate(str(i),title='会话 '+str(i),body='旧一轮已完成')
-            store.event('0','second','started')
+            store.event('0','second','started',interaction=True)
             rows=store.progress()
             self.assertEqual(len(rows),3)
             self.assertEqual(rows[0]['kind'],'started')

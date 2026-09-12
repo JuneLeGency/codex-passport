@@ -16,6 +16,8 @@
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
+        <activity android:name=".GuideActivity" android:exported="false"/>
+        <activity android:name=".DeviceActivity" android:exported="false"/>
         <service android:name=".RelayService" android:exported="false" android:foregroundServiceType="connectedDevice"/>
     </application>
 </manifest>

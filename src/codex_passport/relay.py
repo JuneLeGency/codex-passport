@@ -11,6 +11,7 @@ from .store import Store
 from .sessions import Sessions
 from .usage import UsageClient
 from .routing import Routing
+from .device import DeviceCommands
 
 LOG = logging.getLogger('codex-passport')
 
@@ -24,8 +25,9 @@ def token_file(directory):
     return path
 
 
-def handler_factory(directory, token, routing=None):
+def handler_factory(directory, token, routing=None, commands=None):
     routing = routing or Routing()
+    commands = commands or DeviceCommands(token, routing)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass
@@ -45,14 +47,25 @@ def handler_factory(directory, token, routing=None):
         def do_GET(self):
             if not self.authorized():
                 return self.reply(401, {'error': 'unauthorized'})
-            if self.path != '/v1/snapshot':
+            if self.path == '/v1/ping':
+                return self.reply(200, {'v': 1, 'deviceSettings': True, 'wifi': True})
+            if self.path not in ('/v1/snapshot', '/v1/device/snapshot'):
                 return self.reply(404, {'error': 'not found'})
-            from .cli import snapshot
+            from .cli import snapshot, device_frame
+            route = routing.view()
+            if self.path == '/v1/device/snapshot' and route['owner'] != 'wifi':
+                return self.reply(409, {'error': 'route inactive'})
             store = Store(directory)
             try:
                 seq = int(time.time() * 1000) % 2_000_000_000 + 1
                 frame = snapshot(store, seq, store.pending())
-                frame['_link'] = routing.view()
+                frame['cmd'] = commands.current()
+                if self.path == '/v1/device/snapshot':
+                    frame = device_frame(frame)
+                    frame['generation'] = route['generation']
+                else:
+                    frame['_link'] = route
+                    frame['_device'] = commands.view()
                 self.reply(200, frame)
             finally:
                 store.close()
@@ -60,11 +73,11 @@ def handler_factory(directory, token, routing=None):
         def do_POST(self):
             if not self.authorized():
                 return self.reply(401, {'error': 'unauthorized'})
-            if self.path not in ('/v1/ack', '/v1/route'):
+            if self.path not in ('/v1/ack', '/v1/route', '/v1/device/command', '/v1/device/ack'):
                 return self.reply(404, {'error': 'not found'})
             try:
                 length = int(self.headers.get('Content-Length', '-1'))
-                if not 0 <= length <= 1024:
+                if not 0 <= length <= 1536:
                     return self.reply(413, {'error': 'invalid length'})
                 self.connection.settimeout(5)
                 payload = json.loads(self.rfile.read(length))
@@ -77,6 +90,17 @@ def handler_factory(directory, token, routing=None):
                     return self.reply(200, routing.select(payload.get('owner')))
                 except ValueError as exc:
                     return self.reply(400, {'error': str(exc)})
+            if self.path == '/v1/device/command':
+                try:
+                    return self.reply(200, commands.issue(payload))
+                except ValueError as exc:
+                    return self.reply(400, {'error': str(exc)})
+            if self.path == '/v1/device/ack':
+                route = routing.view()
+                if route['owner'] != 'wifi' or type(payload.get('generation')) is not int or payload['generation'] != route['generation']:
+                    return self.reply(409, {'error': 'route inactive'})
+                routing.acknowledged(route['generation'])
+            commands.acknowledge(payload)
             store = Store(directory)
             try:
                 event = payload.get('event')
@@ -94,7 +118,8 @@ def handler_factory(directory, token, routing=None):
 async def serve(args, store):
     token = token_file(args.state_dir).read_text().strip()
     routing = Routing(desktop=bool(args.ble))
-    server = ThreadingHTTPServer((args.host, args.port), handler_factory(args.state_dir, token, routing))
+    commands = DeviceCommands(token, routing)
+    server = ThreadingHTTPServer((args.host, args.port), handler_factory(args.state_dir, token, routing, commands))
     server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -105,7 +130,7 @@ async def serve(args, store):
     ble_task = None
     if args.ble:
         from .ble import worker
-        ble_task = asyncio.create_task(worker(args.ble, store, routing))
+        ble_task = asyncio.create_task(worker(args.ble, store, routing, commands=commands))
     last = 0
     try:
         while True:

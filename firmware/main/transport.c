@@ -15,6 +15,8 @@
 #include "services/gatt/ble_svc_gatt.h"
 #include "esp_mac.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 static const ble_uuid128_t service=BLE_UUID128_INIT(0x01,0x74,0x72,0x6f,0x70,0x73,0x73,0x61,0x70,0x2d,0x78,0x65,0x64,0x6f,0xc0,0xfa);
 static const ble_uuid128_t rx_uuid=BLE_UUID128_INIT(0x02,0x74,0x72,0x6f,0x70,0x73,0x73,0x61,0x70,0x2d,0x78,0x65,0x64,0x6f,0xc0,0xfa);
@@ -22,6 +24,8 @@ static const ble_uuid128_t tx_uuid=BLE_UUID128_INIT(0x03,0x74,0x72,0x6f,0x70,0x7
 static passport_rx_fn receive;
 static uint16_t connection=BLE_HS_CONN_HANDLE_NONE, tx_handle;
 static atomic_bool secured;
+static atomic_bool active;
+static SemaphoreHandle_t transmit_lock;
 static int64_t connected_at;
 static atomic_int passkey=-1;
 static uint8_t own_address;
@@ -98,6 +102,7 @@ static int gap_event(struct ble_gap_event *event,void *arg)
 }
 static void advertise(void)
 {
+    if(!atomic_load(&active))return;
     struct ble_hs_adv_fields f={0};
     f.flags=BLE_HS_ADV_F_DISC_GEN|BLE_HS_ADV_F_BREDR_UNSUP;
     f.uuids128=(ble_uuid128_t *)&service; f.num_uuids128=1; f.uuids128_is_complete=1;
@@ -123,9 +128,14 @@ static void host_task(void *arg)
 }
 void passport_ble_start(passport_rx_fn callback)
 {
+    if(atomic_load(&active))return;
     receive=callback;
+    if(!transmit_lock)transmit_lock=xSemaphoreCreateMutex();
+    if(!transmit_lock)return;
     if(nvs_flash_init()!=ESP_OK) { ESP_LOGE("passport","NVS unavailable; BLE disabled"); return; }
     if(nimble_port_init()!=ESP_OK) return;
+    connection=BLE_HS_CONN_HANDLE_NONE;atomic_store(&secured,false);atomic_store(&passkey,-1);
+    atomic_store(&active,true);
     uint8_t mac[6]={0}; esp_read_mac(mac,ESP_MAC_BT);
     snprintf(name,sizeof(name),"Passport-%02X%02X%02X",mac[3],mac[4],mac[5]);
     ble_svc_gap_init(); ble_svc_gatt_init();
@@ -143,7 +153,10 @@ void passport_ble_start(passport_rx_fn callback)
 }
 void passport_ble_send(const char *data)
 {
-    if(!atomic_load(&secured) || connection==BLE_HS_CONN_HANDLE_NONE) return;
+    if(!transmit_lock || xSemaphoreTake(transmit_lock,pdMS_TO_TICKS(20))!=pdTRUE)return;
+    if(!atomic_load(&active) || !atomic_load(&secured) || connection==BLE_HS_CONN_HANDLE_NONE) {
+        xSemaphoreGive(transmit_lock);return;
+    }
     size_t len=strlen(data);
     uint16_t mtu=ble_att_mtu(connection);
     size_t chunk=mtu>3 ? mtu-3 : 20;
@@ -152,18 +165,39 @@ void passport_ble_send(const char *data)
         struct os_mbuf *m=ble_hs_mbuf_from_flat(data+off,n);
         if(!m || ble_gatts_notify_custom(connection,tx_handle,m)) break;
     }
+    xSemaphoreGive(transmit_lock);
 }
 bool passport_ble_connected(void) { return atomic_load(&secured); }
 int passport_ble_passkey(void) { return atomic_load(&passkey); }
 
 void passport_ble_tick(void)
 {
-    if(connection!=BLE_HS_CONN_HANDLE_NONE && !atomic_load(&secured) &&
+    if(!transmit_lock || xSemaphoreTake(transmit_lock,0)!=pdTRUE)return;
+    if(atomic_load(&active) && connection!=BLE_HS_CONN_HANDLE_NONE && !atomic_load(&secured) &&
        esp_timer_get_time()-connected_at>120000000) {
         ble_gap_terminate(connection,BLE_ERR_AUTH_FAIL);
     }
+    xSemaphoreGive(transmit_lock);
 }
 void passport_ble_reconnect(void)
 {
-    if(connection!=BLE_HS_CONN_HANDLE_NONE)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);
+    if(!transmit_lock || xSemaphoreTake(transmit_lock,0)!=pdTRUE)return;
+    if(atomic_load(&active) && connection!=BLE_HS_CONN_HANDLE_NONE)ble_gap_terminate(connection,BLE_ERR_REM_USER_CONN_TERM);
+    xSemaphoreGive(transmit_lock);
 }
+
+bool passport_ble_pause(void)
+{
+    if(!transmit_lock)return true;
+    xSemaphoreTake(transmit_lock,portMAX_DELAY);
+    bool was_active=atomic_exchange(&active,false);
+    atomic_store(&secured,false);atomic_store(&passkey,-1);
+    xSemaphoreGive(transmit_lock);
+    if(!was_active)return true;
+    if(nimble_port_stop()!=0){atomic_store(&active,true);return false;}
+    bool ok=nimble_port_deinit()==ESP_OK;
+    connection=BLE_HS_CONN_HANDLE_NONE;
+    ESP_LOGI("passport","BLE paused for Wi-Fi; bonds retained");
+    return ok;
+}
+void passport_ble_resume(void){passport_ble_start(receive);}

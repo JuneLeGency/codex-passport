@@ -1,7 +1,7 @@
 # Python 包：安装、uvx 和更新
 
 Python 包名是 **`codex-passport-sync`**，安装后执行的命令叫 **`codex-passport`**。
-Python 3.10+；电脑 BLE 直连需要 `[ble]` 可选依赖。Python 中继 0.2.0 与 APK/固件 0.2.0 配套使用。升级三会话进展页时需同时更新这三个组件，保留状态目录和绑定。
+Python 3.10+；电脑 BLE 直连需要 `[ble]` 可选依赖。Python 中继 0.3.0 与 APK/固件 0.3.0 配套使用。升级三会话进展页时需同时更新这三个组件，保留状态目录和绑定。
 
 [PyPI 项目页](https://pypi.org/project/codex-passport-sync/) · [GitHub Releases](https://github.com/JuneLeGency/codex-passport/releases)
 
@@ -12,22 +12,22 @@ Python 3.10+；电脑 BLE 直连需要 `[ble]` 可选依赖。Python 中继 0.2.
 安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 后：
 
 ```sh
-uvx --from 'codex-passport-sync==0.2.0' codex-passport --help
+uvx --from 'codex-passport-sync==0.3.0' codex-passport --help
 ```
 
 命令会自动下载 Python 包并显示帮助。临时启动中继也可以：
 
 ```sh
 export COMPUTER_LAN_IP="替换为电脑的局域网 IPv4 地址"
-uvx --from 'codex-passport-sync[ble]==0.2.0' codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765
+uvx --from 'codex-passport-sync[ble]==0.3.0' codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765
 ```
 
 如果提示 `was not found in the package registry`，而 PyPI 项目页已经有该版本，可能是你配置的镜像尚未同步新包。
 临时优先使用官方索引即可，不必修改全局配置：
 
 ```sh
-uvx --refresh --index https://pypi.org/simple --from 'codex-passport-sync==0.2.0' codex-passport --help
-uv tool install --index https://pypi.org/simple 'codex-passport-sync[ble]==0.2.0'
+uvx --refresh --index https://pypi.org/simple --from 'codex-passport-sync==0.3.0' codex-passport --help
+uv tool install --index https://pypi.org/simple 'codex-passport-sync[ble]==0.3.0'
 ```
 
 按 `Ctrl+C` 停止。默认状态目录是 `~/.local/state/codex-passport`，首次启动 `serve` 后在该目录生成 `relay-token`。
@@ -41,7 +41,7 @@ uv tool install --index https://pypi.org/simple 'codex-passport-sync[ble]==0.2.0
 macOS / Linux 终端：
 
 ```sh
-uv tool install 'codex-passport-sync[ble]==0.2.0'
+uv tool install 'codex-passport-sync[ble]==0.3.0'
 uv tool update-shell
 ```
 
@@ -50,17 +50,16 @@ uv tool update-shell
 ```sh
 codex-passport --help
 codex-passport install-hooks
-export COMPUTER_LAN_IP="替换为电脑的局域网 IPv4 地址"
-codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765
+codex-passport setup
 ```
 
-看到 `Relay listening at` 后保持该终端运行。手机填写完整的 `http://电脑IP:18765` 和 `~/.local/state/codex-passport/relay-token` 中的密钥。
+`setup` 会自动选择局域网 IPv4 并打印手机所需的地址和密钥；保持终端运行，勿公开截图。多网卡选错地址时，改用 `codex-passport setup --host 电脑实际局域网IP`。手机填写完整的 `http://电脑IP:18765` 和 `~/.local/state/codex-passport/relay-token` 中的密钥。
 已打开的 Codex 会话需要重新打开。可按 [入门指南第 6 步](GETTING_STARTED.zh_CN.md#6-手机填写地址并首次配对) 完成手机与设备配对。
 
 可选电脑直连：停止上面的前台进程，再运行：
 
 ```sh
-codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765 --ble "替换为自己的 Passport-广播名"
+codex-passport setup --ble "替换为自己的 Passport-广播名"
 ```
 
 首次在操作系统配对弹窗输入 Passport 当前的六位码。BLE 只能有一个发送方，先让手机释放连接。
@@ -69,16 +68,16 @@ codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765 --ble "替换为自�
 
 ## 方式三：下载 wheel，直接安装
 
-无法使用 PyPI 时，下载 [Python 发布文件](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.2.0) 中的 wheel 和 `SHA256SUMS`，在文件所在目录运行：
+无法使用 PyPI 时，下载 [Python 发布文件](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0) 中的 wheel 和 `SHA256SUMS`，在文件所在目录运行：
 
 ```sh
-uvx --from ./codex_passport_sync-0.2.0-py3-none-any.whl codex-passport --help
+uvx --from ./codex_passport_sync-0.3.0-py3-none-any.whl codex-passport --help
 ```
 
 持久安装并启用电脑 BLE：
 
 ```sh
-uv tool install 'codex-passport-sync[ble] @ ./codex_passport_sync-0.2.0-py3-none-any.whl'
+uv tool install 'codex-passport-sync[ble] @ ./codex_passport_sync-0.3.0-py3-none-any.whl'
 uv tool update-shell
 ```
 
@@ -89,7 +88,7 @@ wheel 本身在本地，依赖仍可能需要联网下载。安装后使用上�
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install 'codex-passport-sync[ble]==0.2.0'
+.venv/bin/python -m pip install 'codex-passport-sync[ble]==0.3.0'
 .venv/bin/codex-passport --help
 ```
 
@@ -109,6 +108,7 @@ Hooks、采集器和诊断命令必须指向同一状态目录，否则会出现
 
 | 命令 | 做什么 |
 | --- | --- |
+| `codex-passport setup` | 自动选择私有局域网 IPv4、显示地址/配对密钥并启动中继；可用 `--host` 指定地址 |
 | `codex-passport install-hooks` | 备份并合并当前用户的 Codex Hooks；不会启动中继 |
 | `codex-passport serve --host IP --port 18765` | 持续采集并提供手机中继 API |
 | `codex-passport serve --host IP --ble NAME` | 同时提供电脑 BLE 直连与手机回退 |

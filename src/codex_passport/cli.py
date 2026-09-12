@@ -104,11 +104,13 @@ def snapshot(store, seq, event=None):
 
 def device_frame(frame):
     """Three bounded progress cards; notification delivery remains a separate receipt."""
-    result = {k: v for k, v in frame.items() if k not in ('_link', '_threads')}
+    result = {k: v for k, v in frame.items() if k not in ('_link', '_threads', '_device')}
     result['recent'] = frame.get('_threads', frame.get('recent', []))[:3]
     event = frame.get('event')
     result['event'] = None if not event else {
         'id': event['id'], 'kind': event['kind'], 'project': '', 'time': event['time']}
+    while result['recent'] and len(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode()) > 1900:
+        result['recent'] = result['recent'][:-1]
     return result
 
 
@@ -231,6 +233,11 @@ def main():
     relay.add_argument('--port', type=int, default=18765)
     relay.add_argument('--codex', default='codex')
     relay.add_argument('--ble', metavar='DEVICE', help='Optional Passport BLE name/address; phone fallback on failure')
+    setup = sub.add_parser('setup', help='Show phone connection details and start the private LAN relay')
+    setup.add_argument('--host', help='Computer LAN IPv4 address; detect the default LAN interface if omitted')
+    setup.add_argument('--port', type=int, default=18765)
+    setup.add_argument('--codex', default='codex')
+    setup.add_argument('--ble', metavar='DEVICE')
     bluetooth = sub.add_parser('ble', help='Deliver the existing collector state directly over BLE')
     bluetooth.add_argument('--device', required=True, help='Passport advertising name or OS Bluetooth address')
     bluetooth.add_argument('--once', action='store_true')
@@ -243,7 +250,20 @@ def main():
         store = Store(args.state_dir)
         if args.command == 'run':
             asyncio.run(run(args, store))
-        elif args.command == 'serve':
+        elif args.command in ('serve', 'setup'):
+            if args.command == 'setup':
+                import socket
+                from .device import private_endpoint
+                from .relay import token_file
+                if not args.host:
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                        probe.connect(('192.0.2.1', 9))  # Route lookup only; sends no packets.
+                        args.host = probe.getsockname()[0]
+                address = private_endpoint(f'http://{args.host}:{args.port}')
+                print('Android → 入门指南 → 连接电脑', flush=True)
+                print(f'中继地址：{address}', flush=True)
+                print(f'配对密钥：{token_file(args.state_dir).read_text().strip()}', flush=True)
+                print('请保持此终端与电脑运行；只把密钥填入自己的手机。Ctrl+C 可停止。', flush=True)
             from .relay import serve
             asyncio.run(serve(args, store))
         elif args.command == 'ble':

@@ -23,7 +23,7 @@ def main():
     if hashlib.sha256(font.read_bytes()).hexdigest()!=SHA256:raise RuntimeError('Font checksum mismatch')
     subprocess.run(['npx','--yes','lv_font_conv@1.5.3','--font','firmware/generated/NotoSansCJKsc-Regular.otf',
                     '--size','16','--bpp','2','--range','0x20-0xff,0x2000-0x206f,0x2190-0x21ff,0x3000-0x30ff,0x4e00-0x9fff,0xff00-0xffef',
-                    '--format','lvgl','--no-compress','--no-kerning','--lv-include','lvgl.h',
+                    '--format','lvgl','--no-kerning','--lv-include','lvgl.h',
                     '--output','firmware/generated/passport_cjk16.c'],cwd=ROOT,check=True)
     output=directory/'passport_cjk16.c'
     value=re.sub(r'\.line_height = \d+', '.line_height = 24', output.read_text())

@@ -23,6 +23,7 @@ with link as s:
   data.extend(s.read(s.in_waiting or 1))
   if b'PASSPORT_CAPTURE_END' in data:break
 image=Image.new('RGB',(240,320),'#111a13')
+if b'PASSPORT_CAPTURE_ERROR' in data:raise RuntimeError('Incomplete device rendering; inspect the device diagnostic log')
 position=data.find(b'PASSPORT_TILES')
 if position<0:raise RuntimeError('Device did not return a capture')
 position=data.index(b'\n',position)+1

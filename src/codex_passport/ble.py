@@ -13,8 +13,9 @@ LOG = logging.getLogger('codex-passport')
 
 
 class Receipts:
-    def __init__(self, store):
+    def __init__(self, store, commands=None):
         self.store = store
+        self.commands = commands
         self.buffer = bytearray()
         self.pending = None
         self.ack = asyncio.Event()
@@ -30,6 +31,8 @@ class Receipts:
                 continue
             if not isinstance(reply, dict) or reply.get('v') != 1:
                 continue
+            if self.commands:
+                self.commands.acknowledge(reply)
             if self.pending and reply.get('ack') == self.pending[0]:
                 event = self.pending[1]
                 if event and reply.get('event') == event['id']:
@@ -46,7 +49,10 @@ class Receipts:
 
 async def deliver(client, receipts, store, seq):
     event = store.pending()
-    frame = device_frame(snapshot(store, seq, event))
+    frame = snapshot(store, seq, event)
+    if receipts.commands:
+        frame['cmd'] = receipts.commands.current()
+    frame = device_frame(frame)
     raw = json.dumps(frame, ensure_ascii=False, separators=(',', ':')).encode() + b'\n'
     if len(raw) > 2048:
         raise ValueError('Snapshot exceeds the device frame limit')
@@ -70,7 +76,7 @@ async def deliver(client, receipts, store, seq):
     await asyncio.wait_for(receipts.ack.wait(), timeout=15)
 
 
-async def connect_and_sync(device, store, routing, generation, once=False):
+async def connect_and_sync(device, store, routing, generation, once=False, commands=None):
     from bleak import BleakClient, BleakScanner
     # Select explicitly; never pair with an arbitrary nearby Passport.
     found = await BleakScanner.find_device_by_filter(
@@ -81,7 +87,7 @@ async def connect_and_sync(device, store, routing, generation, once=False):
     if routing.view()['generation'] != generation:
         return False
     async with BleakClient(found, pair=True, timeout=45) as client:
-        receipts = Receipts(store)
+        receipts = Receipts(store, commands)
         await client.start_notify(TX, receipts.receive)
         seq = int(time.time()*1000) % 2_000_000_000
         last_send, signature = 0, ''
@@ -90,6 +96,8 @@ async def connect_and_sync(device, store, routing, generation, once=False):
             if route['owner'] != 'desktop' or route['generation'] != generation:
                 return False
             frame = device_frame(snapshot(store, 0, store.pending()))
+            if commands:
+                frame['cmd'] = commands.current()
             frame.pop('now')
             current = json.dumps(frame, sort_keys=True)
             if current != signature or time.monotonic() - last_send >= 10:
@@ -107,13 +115,13 @@ async def connect_and_sync(device, store, routing, generation, once=False):
         raise ConnectionError('Passport disconnected')
 
 
-async def worker(device, store, routing, once=False):
+async def worker(device, store, routing, once=False, commands=None):
     while True:
         route = routing.view()
         if route['owner'] == 'desktop':
             generation = route['generation']
             try:
-                operation = connect_and_sync(device, store, routing, generation, once)
+                operation = connect_and_sync(device, store, routing, generation, once, commands)
                 acknowledged = await asyncio.wait_for(operation, 170) if once else await operation
                 if once:
                     if not acknowledged:
