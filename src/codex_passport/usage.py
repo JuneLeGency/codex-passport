@@ -3,6 +3,7 @@ import asyncio
 import json
 import math
 import time
+from . import __version__
 
 
 def normalize(response):
@@ -68,7 +69,7 @@ class UsageClient:
                     self.executable, 'app-server', stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
                     limit=4*1024*1024)
-                await self.request('initialize', {'clientInfo': {'name': 'codex-passport-sync', 'version': '0.1.0'}})
+                await self.request('initialize', {'clientInfo': {'name': 'codex-passport-sync', 'version': __version__}})
                 self.process.stdin.write(b'{"method":"initialized"}\n')
                 await self.process.stdin.drain()
             limits = normalize(await self.request('account/rateLimits/read'))

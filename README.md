@@ -1,93 +1,88 @@
 # Codex Passport
 
-[完整中文说明](README.zh_CN.md)
-<img src="docs/images/dashboard-example.png" alt="Passport graphical dashboard" width="240">
+Codex session notifications and quota visualization on FoloToy AI Passport, with an Android companion.
+
+**[从零开始：中文一步步入门](https://github.com/JuneLeGency/codex-passport/blob/main/docs/GETTING_STARTED.zh_CN.md)** · [中文介绍](https://github.com/JuneLeGency/codex-passport/blob/main/README.zh_CN.md) · [Python / uvx guide](https://github.com/JuneLeGency/codex-passport/blob/main/docs/PYTHON.md) · [Downloads](https://github.com/JuneLeGency/codex-passport/releases)
+
+<img src="https://raw.githubusercontent.com/JuneLeGency/codex-passport/main/docs/images/dashboard-example.png" alt="Passport graphical quota dashboard" width="240">
 
 Synthetic quota fixture rendered on the physical device; no account or conversation data.
 
+## What it does
 
-An independently written Codex notification and usage companion for FoloToy AI Passport.
-Computer → encrypted BLE → Passport, or computer → LAN/WireGuard → Android → encrypted BLE → Passport.
-The application does not reuse the studied reference application's implementation.
-Official FoloToy BSP, Material Components are attributed dependencies.
+- Computer → encrypted BLE → Passport, or computer → private LAN/WireGuard → Android → encrypted BLE → Passport.
+- Meaningful completion, failure, interruption, approval and input notifications across local Codex sessions. Starts and housekeeping update silently; internal guardian/memory workers are excluded.
+- Durable delivery queue, device acknowledgements, offline replay, and one active BLE sender with phone fallback.
+- Remaining quota compared with remaining cycle time. Orange means faster consumption, green balanced, blue slower.
+- Native 240×320 Passport dashboard and physical-button controls. Material 3 Expressive Android overview, notification and connection pages.
 
-Meaningful events include completion, failure, interruption, approval and input requests.
-Starts, session lifecycle and compaction update silently. Hidden guardian/memory workers
-are excluded. Inbox entries are grouped by session and include a bounded title and summary.
-SQLite deduplicates and persists events until a device acknowledgement arrives.
-Approvals and replies remain in Codex. Global hooks need existing sessions to restart;
-incremental logs are a compatibility fallback, not a stable API or Mobile push integration.
-Other-host sessions require a collector on that host.
+Phone notifications show bounded titles and summaries for the four most recent sessions. Passport receives quota, counts and receipt IDs, with no conversation text.
+**This version does not resume conversations, send replies or approve actions.** Those stay in Codex.
+Hooks need existing sessions to restart after installation; incremental logs are a compatibility fallback, not a stable API or Codex Mobile push integration.
+Other computers need their own collectors.
 
-## Run
+## Get started
 
-```sh
-uv sync --extra ble
-export COMPUTER_LAN_IP="your-computer-private-IP"
-uv run codex-passport --state-dir .runtime/live install-hooks
-uv run codex-passport --state-dir .runtime/live serve --host "$COMPUTER_LAN_IP" --port 18765
-```
+The [beginner guide](https://github.com/JuneLeGency/codex-passport/blob/main/docs/GETTING_STARTED.zh_CN.md) covers tool installation, backup/app-only flashing, APK installation without ADB, relay configuration, pairing, a real notification test, startup, switching, troubleshooting and removal.
+It uses the verified macOS + Android + Passport setup. Linux host deployment needs platform adaptation; Windows host deployment has not been validated.
 
-Configure Android with the relay address and `.runtime/live/relay-token` in its Connection
-page. These are separate from wireless ADB addresses. Keep the existing WireGuard tunnel
-enabled outside the LAN. HTTP is restricted to private destinations; do not expose it publicly.
-A dedicated token and paired BLE link protect access. Bounded summaries can contain private
-conversation context; complete transcripts and raw commands are not forwarded.
+Download the ready-made [Android APK and Passport firmware v0.1.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.1.0).
+Python 0.1.1 is a documentation/packaging update compatible with those device files; no device reinstall is needed for this update.
+The APK is debug-signed. Back up the device before flashing and write **only the app at 0x10000 on the documented hardware layout**, preserving its other partitions.
 
-`scripts/install_macos_service.py` installs a user LaunchAgent bound only to the configured
-LAN address. Use a persistent Python environment for hooks, rather than an ephemeral uvx cache.
+## Python installation
 
-## Apps
-
-Android 6+; official Material 3 Expressive 1.14.0 theme, overview/inbox/connection pages,
-light/dark palettes, accessible controls and usage indicators. Nearby Devices is required on
-Android 12+; older versions need location for BLE scanning. A connectedDevice foreground
-service retries delivery. The APK is an internal debug-signed build.
-
-Passport uses a native 240×320 visual dashboard: quota-remaining outer arc, time-remaining inner arc,
-remaining quota in the center, plus running/waiting/unread icons. Orange is faster than an even
-budget, green balanced and blue slower, with a five-percentage-point tolerance. UP/DOWN switches quota windows;
-OK marks received notifications read; hold OK to reconnect without deleting bonds.
-The first press while asleep only wakes the screen. Double-click does nothing. Backlight sleeps after 60 seconds without alerts/buttons.
-BLE uses longer intervals and slave latency; unchanged snapshots send approximately every
-12 seconds. Battery current and endurance have not been measured.
-
-Quota windows use actual `account/rateLimits/read` results and optional `account/usage/read`.
-Expired/stale quota is unavailable, never fabricated as full.
-
-## Build
+Requires Python 3.10+ and a working, logged-in Codex CLI. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then try:
 
 ```sh
-uv run python -m unittest discover -s tests -v
-uv build
-uvx --from ./dist/codex_passport_sync-0.1.0-py3-none-any.whl codex-passport --help
+uvx --from 'codex-passport-sync==0.1.1' codex-passport --help
 ```
 
-Python 3.10+, ESP-IDF 5.5.3, Gradle 8.14.4 / AGP 8.10.1. Build Android with `assembleDebug`
-and firmware with `idf.py -C firmware build`. The local wheel works with uvx; no PyPI release yet.
-Flash **only the app at 0x10000**, preserving bootloader, partition table, NVS, cardid and Recovery.
-The graphical app fits the 3 MB factory partition; the 1 MB Recovery warning does not mean it
-should overwrite Recovery. The private device backup is excluded from all packages.
+For persistent hooks, install a persistent tool environment instead:
 
-See the Chinese guide for exact deployment commands, pinned dependencies, validation and limits.
+```sh
+uv tool install 'codex-passport-sync[ble]==0.1.1'
+uv tool update-shell
+```
 
-References: [FoloToy](https://github.com/folotoy/ai-passport),
-[studied reference](https://github.com/zt20/codex-usage-ai-passport),
-[Codex hooks](https://learn.chatgpt.com/docs/hooks), [app server](https://learn.chatgpt.com/docs/app-server),
-[M3 Expressive](https://m3.material.io/blog/building-with-m3-expressive).
+Open a new terminal, then:
 
-## Direct computer BLE
+```sh
+codex-passport install-hooks
+export COMPUTER_LAN_IP="replace-with-this-computers-private-IP"
+codex-passport serve --host "$COMPUTER_LAN_IP" --port 18765
+```
 
-Install the `ble` extra and add `--ble "Passport-XXXXXX"` to `serve` (or to the macOS installer).
-Use the device's advertised name or OS Bluetooth address. Pair in the OS dialog with the current
-six-digit device code; grant Bluetooth access first, interactively on macOS. Android's Connection
-page selects phone forwarding or direct computer BLE. Only one connection owns delivery.
-If desktop pairing/connect/ACK fails, ownership returns to the phone and stays there until you
-select desktop again. VPN connectivity is not treated as Bluetooth proximity. Both routes share
-the durable outbox and device receipts. `ble --device NAME --once` is a foreground diagnostic
-against existing collector state; pause the phone first when using that standalone command.
+Keep that terminal open. Configure Android's Connection page with `http://YOUR_COMPUTER_IP:18765` and the contents of `~/.local/state/codex-passport/relay-token`.
+Allow Bluetooth permissions and enter the current six-digit Passport code in the phone's system pairing dialog.
+Restart existing Codex sessions to load the hooks. The address is the relay API, not wireless ADB or a WireGuard endpoint.
 
-Run `python scripts/fetch_bsp.py` before building firmware. The source checkout excludes private
-state, binaries and device backups. See [validation](docs/VALIDATION.md) and [dependencies](THIRD_PARTY.md).
+Add `--ble "Passport-XXXXXX"` using your device's actual advertised name for computer BLE. First pairing requires the computer's OS dialog and Bluetooth permission.
+The `[ble]` extra is required for this route. Select the sender on Android's Connection page; a failed computer connection falls back to the phone and stays there until selected again.
+Do not install permanent hooks from a temporary uvx environment, whose cache can be removed.
 
-Daily BLE frames carry only quota, counts and receipt IDs; conversation titles, summaries and project names stay on the phone.
+[PyPI package](https://pypi.org/project/codex-passport-sync/) · [Wheel downloads](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.1.1) · [All installation options and state paths](https://github.com/JuneLeGency/codex-passport/blob/main/docs/PYTHON.md)
+
+## Daily controls and scope
+
+| Control | Result |
+| --- | --- |
+| UP / DOWN | Switch quota windows |
+| Short OK while awake | Mark received notifications read; never approve an action |
+| First press while asleep | Wake only |
+| Hold OK while awake | Reconnect BLE, preserving bonds |
+
+The backlight sleeps after 60 seconds without alerts/buttons. Daily BLE frames contain no conversation text.
+An authenticated private relay and paired BLE protect access; bounded phone summaries can still contain private context.
+Keep the relay within your private network/VPN. Do not expose its HTTP port publicly. The computer must stay awake and run the collector.
+
+Both BLE routes, route switching, replay and physical controls were validated. Off-LAN WireGuard and battery endurance were not measured.
+See the [validation record](https://github.com/JuneLeGency/codex-passport/blob/main/docs/VALIDATION.md) for the exact evidence and limitations.
+
+## Development and attribution
+
+[Build instructions](https://github.com/JuneLeGency/codex-passport/blob/main/docs/DEVELOPMENT.md) · [MIT license](https://github.com/JuneLeGency/codex-passport/blob/main/LICENSE) · [Third-party notices](https://github.com/JuneLeGency/codex-passport/blob/main/THIRD_PARTY.md)
+
+Application code is independently authored. Official FoloToy BSP, Material Components and other dependencies retain their own licenses.
+The [reference application](https://github.com/zt20/codex-usage-ai-passport) was studied, not copied.
+This is a community project, not an official OpenAI or FoloToy product.

@@ -27,3 +27,6 @@ artifacts/
 *.sqlite*
 *.db*
 *.log
+
+# User-downloaded release files
+downloads/

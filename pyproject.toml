@@ -4,12 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codex-passport-sync"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local Codex lifecycle notifications and usage for FoloToy AI Passport"
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["pyserial>=3.5,<4"]
+
+[project.urls]
+Homepage = "https://github.com/JuneLeGency/codex-passport"
+Documentation = "https://github.com/JuneLeGency/codex-passport/blob/main/docs/GETTING_STARTED.zh_CN.md"
+Repository = "https://github.com/JuneLeGency/codex-passport"
+Issues = "https://github.com/JuneLeGency/codex-passport/issues"
+Changelog = "https://github.com/JuneLeGency/codex-passport/releases"
 
 [project.optional-dependencies]
 ble = ["bleak>=1.1,<4"]
