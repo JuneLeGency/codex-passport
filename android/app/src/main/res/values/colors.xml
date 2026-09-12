@@ -1,0 +1,14 @@
+<resources>
+<color name="primary">#285743</color>
+<color name="on_primary">#FFFFFF</color>
+<color name="primary_container">#C5EFCC</color>
+<color name="on_primary_container">#123C29</color>
+<color name="secondary_container">#E0E8D9</color>
+<color name="tertiary_container">#FFDCC6</color>
+<color name="on_tertiary_container">#743711</color>
+<color name="surface">#F8FAF2</color>
+<color name="on_surface">#19211C</color>
+<color name="container">#EEF1E8</color>
+<color name="on_variant">#566157</color>
+<color name="outline">#C6CFC2</color>
+</resources>

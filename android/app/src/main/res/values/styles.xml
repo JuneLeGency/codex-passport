@@ -1,0 +1,14 @@
+<resources>
+<style name="Theme.Passport" parent="Theme.Material3Expressive.DayNight.NoActionBar">
+    <item name="colorPrimary">@color/primary</item><item name="colorOnPrimary">@color/on_primary</item>
+    <item name="colorPrimaryContainer">@color/primary_container</item><item name="colorOnPrimaryContainer">@color/on_primary_container</item>
+    <item name="colorSecondary">@color/primary</item><item name="colorSecondaryContainer">@color/secondary_container</item><item name="colorOnSecondaryContainer">@color/on_surface</item>
+    <item name="colorTertiaryContainer">@color/tertiary_container</item><item name="colorOnTertiaryContainer">@color/on_tertiary_container</item>
+    <item name="colorSurface">@color/surface</item><item name="colorOnSurface">@color/on_surface</item>
+    <item name="colorSurfaceContainer">@color/container</item><item name="colorSurfaceContainerLow">@color/container</item>
+    <item name="colorOnSurfaceVariant">@color/on_variant</item><item name="colorOutlineVariant">@color/outline</item>
+    <item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">true</item>
+    <item name="android:windowActionModeOverlay">true</item><item name="android:windowBackground">@color/surface</item>
+    <item name="android:navigationBarColor">@color/surface</item>
+</style>
+</resources>
