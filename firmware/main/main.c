@@ -13,10 +13,13 @@
 #include "bsp_display.h"
 #include "bsp_battery.h"
 #include "bsp_button.h"
+#include "bsp_pins.h"
+#include "driver/ledc.h"
 #include "protocol.h"
 #include "transport.h"
 #include "controls.h"
 #include "alert_policy.h"
+#include "screen_policy.h"
 #include "sound.h"
 #include "preferences.h"
 #include "wifi_link.h"
@@ -25,14 +28,17 @@
 
 /* Only this task owns application state; all LVGL access uses the BSP mutex. */
 static QueueHandle_t snapshots, buttons, captures;
+static TaskHandle_t app_task;
 static passport_snapshot_t state;
-static uint64_t received_ms, interaction_ms;
+static uint64_t received_ms;
 static bool dimmed;
+static uint32_t render_count;
 static control_state_t controls;
 static alert_policy_t alerts;
+static screen_policy_t screen;
 typedef struct { int key, event; } key_event_t;
 
-static uint32_t seen_event, read_through;
+static uint32_t read_through;
 static uint32_t last_command;
 static bool command_ok;
 static int page, window_index, battery=-1;
@@ -183,6 +189,7 @@ static void render_notices(bool live)
 }
 static void render(uint64_t now)
 {
+    ++render_count;
     ui=&views[page];
     if(lv_screen_active()!=ui->screen)lv_screen_load(ui->screen);
     bool live=received_ms && now-received_ms<30000;
@@ -231,13 +238,14 @@ static void render(uint64_t now)
     if(pin>=0){
         if(page==0){lv_label_set_text_fmt(ui->amount,"%06d",pin);lv_label_set_text(ui->window_label,LV_SYMBOL_BLUETOOTH);}
         else {lv_label_set_text(ui->amount,LV_SYMBOL_BLUETOOTH);lv_label_set_text_fmt(ui->window_label,"%06d",pin);}
-        lv_label_set_text(ui->reset_label,"PAIR");interaction_ms=now;
+        lv_label_set_text(ui->reset_label,"PAIR");
     }
 }
 static void on_button(bsp_btn_t button,bsp_btn_ev_t event,void *context)
 {
     (void)context;
-    key_event_t key={button,event}; (void)xQueueSend(buttons,&key,0);
+    key_event_t key={button,event};
+    if(xQueueSend(buttons,&key,0)==pdTRUE)xTaskNotifyGive(app_task);
 }
 static void ble_receive(const uint8_t *bytes,size_t size)
 {
@@ -249,7 +257,8 @@ static void ble_receive(const uint8_t *bytes,size_t size)
     for(size_t i=0;i<size;++i) {
         if(bytes[i]=='\n') {
             line[length]='\0';
-            if(!overflow && passport_parse(line,length,&next)) (void)xQueueSend(snapshots,&next,0);
+            if(!overflow && passport_parse(line,length,&next) && xQueueSend(snapshots,&next,0)==pdTRUE)
+                xTaskNotifyGive(app_task);
             length=0; overflow=false;
         } else if(length<PASSPORT_LINE_MAX) line[length++]=bytes[i];
         else overflow=true;
@@ -278,7 +287,9 @@ static bool wifi_receive(const char *json,size_t length)
     static passport_snapshot_t next;
     if(!passport_parse(json,length,&next))return false;
     next.via_wifi=true;
-    return xQueueSend(snapshots,&next,pdMS_TO_TICKS(100))==pdTRUE;
+    bool queued=xQueueSend(snapshots,&next,pdMS_TO_TICKS(100))==pdTRUE;
+    if(queued)xTaskNotifyGive(app_task);
+    return queued;
 }
 static void apply_command(uint64_t now)
 {
@@ -288,7 +299,7 @@ static void apply_command(uint64_t now)
         if(cmd->kind==COMMAND_SETTINGS) {
             command_ok=passport_preferences_set(cmd->brightness,cmd->idle) && passport_sound_configure(cmd->muted,cmd->volume);
         } else if(cmd->kind==COMMAND_IDENTIFY) {
-            interaction_ms=now;passport_sound_notify();command_ok=true;
+            screen_policy_touch(&screen,now);passport_sound_notify();command_ok=true;
         } else if(cmd->kind==COMMAND_WIFI || cmd->kind==COMMAND_FORGET_WIFI)command_ok=passport_wifi_command(cmd);
     }
     /* Never retain provisioning credentials in render state or diagnostic output. */
@@ -334,16 +345,18 @@ static void usb_task(void *context)
     usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_LF);
     for(;;) {
         int c=getchar();
-        if(c==EOF) { clearerr(stdin); vTaskDelay(pdMS_TO_TICKS(100)); continue; }
+        if(c==EOF) { clearerr(stdin); vTaskDelay(pdMS_TO_TICKS(500)); continue; }
         if(c=='\n') {
             line[length]='\0';
-            if(!overflow && !strcmp(line,"CAPTURE")) { int yes=1; xQueueOverwrite(captures,&yes); }
+            if(!overflow && !strcmp(line,"POWER")) { int status=-1; xQueueOverwrite(captures,&status); }
+            else if(!overflow && !strcmp(line,"CAPTURE")) { int yes=1; xQueueOverwrite(captures,&yes); }
             else if(!overflow && (!strcmp(line,"CAPTURE0") || !strcmp(line,"CAPTURE1"))) {
                 int target=2+line[7]-'0';xQueueOverwrite(captures,&target);
             }
             else if(!overflow && passport_parse(line,length,&next)) {
                 if(xQueueSend(snapshots,&next,pdMS_TO_TICKS(100))!=pdTRUE) printf("{\"v\":1,\"busy\":true}\n");
             } else printf("{\"v\":1,\"invalid\":true}\n");
+            xTaskNotifyGive(app_task);
             length=0; overflow=false;
         } else if(length<PASSPORT_LINE_MAX) line[length++]=(char)c;
         else overflow=true;
@@ -351,14 +364,15 @@ static void usb_task(void *context)
 }
 void app_main(void)
 {
+    app_task=xTaskGetCurrentTaskHandle();
     ESP_ERROR_CHECK(bsp_display_init());
     if(!bsp_lvgl_init()) return;
     (void)bsp_battery_init();
     snapshots=xQueueCreate(2,sizeof(passport_snapshot_t)); buttons=xQueueCreate(8,sizeof(key_event_t)); captures=xQueueCreate(1,sizeof(int));
     if(!snapshots || !buttons || !captures) return;
     if(bsp_lvgl_lock(1000)) { create_ui(); bsp_lvgl_unlock(); }
-    bsp_display_backlight(55);
-    interaction_ms=millis();
+    /* Keep the backlight off until preferences and the first frame are ready. */
+    screen_policy_touch(&screen,millis());
     passport_ble_start(ble_receive);
     passport_sound_init();
     passport_preferences_init();
@@ -367,22 +381,26 @@ void app_main(void)
     if(xTaskCreate(usb_task,"passport_usb",8192,NULL,4,NULL)!=pdPASS) return;
     uint64_t last_battery=0, last_ui=0;
     int last_pin=-2,last_brightness=-1;
+    bool ui_dirty=true,battery_sampled=false;
     for(;;) {
         uint64_t now=millis();
         passport_ble_tick();
         bool updated=xQueueReceive(snapshots,&state,0)==pdTRUE;
         if(updated) {
             received_ms=now;
-            if(state.event.id>seen_event) {
-                seen_event=state.event.id;
-                if(alert_needs_attention(state.event.kind))interaction_ms=now;
-            }
             apply_command(now);
+            ui_dirty=true;
         }
+        unsigned idle_seconds=passport_idle_seconds();
+        if(battery>=0 && battery<=10 && idle_seconds>30)idle_seconds=30;
+        /* Use the current deadline, including at the exact sleep/press boundary. */
+        dimmed=!screen_policy_awake(&screen,now,idle_seconds);
         key_event_t key;
         while(xQueueReceive(buttons,&key,0)==pdTRUE) {
             control_action_t action=control_event(&controls,key.key,key.event,dimmed);
-            if(action!=CONTROL_NONE)interaction_ms=now;
+            if(action!=CONTROL_NONE) {
+                screen_policy_touch(&screen,now);dimmed=false;ui_dirty=true;
+            }
             if(action==CONTROL_READ) { read_through=state.latest;receipt(false); }
             else if(action==CONTROL_PAGE)page=!page;
             else if(action==CONTROL_WINDOW)window_index=!window_index;
@@ -394,9 +412,25 @@ void app_main(void)
         }
         if(updated && alert_policy_update(&alerts,&state,read_through,passport_sound_muted(),now))
             passport_sound_notify();
-        if(now-last_battery>10000 || battery<0) { battery=bsp_battery_soc(); last_battery=now; }
         int pin=passport_ble_passkey();
-        if((updated || now-last_ui>=5000 || now-interaction_ms<200 || pin!=last_pin || uxQueueMessagesWaiting(captures)) && bsp_lvgl_lock(1000)) {
+        /* Pairing is an explicit operation and must remain visible while its PIN is valid. */
+        if(pin>=0)screen_policy_touch(&screen,now);
+        if(updated)(void)screen_policy_update(&screen,&state,read_through,now,idle_seconds);
+        dimmed=!screen_policy_awake(&screen,now,idle_seconds);
+        if(!battery_sampled || now-last_battery>=(dimmed?60000ULL:10000ULL)) {
+            battery=bsp_battery_soc();last_battery=now;battery_sampled=true;ui_dirty=true;
+            if(battery>=0 && battery<=10 && idle_seconds>30)idle_seconds=30;
+            dimmed=!screen_policy_awake(&screen,now,idle_seconds);
+        }
+        /* Data and receipts continue in the dark; defer all normal rendering until wake. */
+        if(dimmed && last_brightness!=0){bsp_display_backlight(0);last_brightness=0;}
+        int diagnostic=0;
+        bool power_status=xQueuePeek(captures,&diagnostic,0)==pdTRUE && diagnostic==-1;
+        if(power_status)(void)xQueueReceive(captures,&diagnostic,0);
+        bool capture_pending=uxQueueMessagesWaiting(captures)>0;
+        bool show=!dimmed && (ui_dirty || now-last_ui>=5000 || pin!=last_pin || last_brightness<=0);
+        bool rendered=false;
+        if((show || capture_pending) && bsp_lvgl_lock(1000)) {
             last_ui=now; last_pin=pin;
             render(now);
             int requested;
@@ -406,14 +440,22 @@ void app_main(void)
                 capture();
                 if(page!=previous){page=previous;render(now);}
             }
+            /* Finish the updated frame before lighting the panel, avoiding a stale flash. */
+            if(!dimmed && last_brightness<=0)lv_refr_now(lv_display_get_default());
+            ui_dirty=false;rendered=true;
             bsp_lvgl_unlock();
         }
         if(updated)receipt(true);
-        unsigned idle_seconds=passport_idle_seconds();
-        if(battery>=0 && battery<=10 && idle_seconds>30)idle_seconds=30;
-        dimmed=now-interaction_ms>idle_seconds*1000ULL;
-        int brightness=dimmed?0:(int)passport_brightness(battery);
+        int brightness=dimmed || (last_brightness<=0 && !rendered)?0:(int)passport_brightness(battery);
         if(brightness!=last_brightness){bsp_display_backlight(brightness);last_brightness=brightness;}
-        vTaskDelay(pdMS_TO_TICKS(100));
+        /* Read-only USB diagnostics: never wake, render or expose session/network content. */
+        if(power_status)printf("{\"power\":{\"ms\":%" PRIu64 ",\"dark\":%s,\"pwm\":%" PRIu32
+            ",\"renders\":%" PRIu32 ",\"received_ms\":%" PRIu64 ",\"notice_ms\":%" PRIu64
+            ",\"unread\":%" PRIu32 "}}\n",now,dimmed?"true":"false",
+            ledc_get_duty(BSP_BL_LEDC_MODE,BSP_BL_LEDC_CHANNEL),render_count,received_ms,
+            screen.notice_ms,state.latest<=read_through?0:state.unread);
+        /* Buttons and incoming frames interrupt this wait immediately, even in the dark. */
+        if(!uxQueueMessagesWaiting(snapshots) && !uxQueueMessagesWaiting(buttons) && !uxQueueMessagesWaiting(captures))
+            ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(dimmed?1000:100));
     }
 }

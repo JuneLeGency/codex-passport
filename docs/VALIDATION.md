@@ -2,6 +2,40 @@
 
 This file records evidence, not a claim of equivalence to Codex Mobile.
 
+## 0.3.1 power changes — 2026-09-14
+
+The timed hardware checks below used 0.3.1-dev; the final 0.3.1 promotion changes version metadata
+and release documentation without changing the tested firmware behavior. Native screen-policy tests cover historical/batch
+deduplication, the five-minute wake limit, the fifteen-second notification deadline, no extension
+while viewing, consumed suppressed events, separate sound mute, saved viewing time and wake-only
+button behavior. Existing alert/control tests pass. The development firmware was subsequently
+flashed to the application partition only, with the write hash verified. Saved preferences and
+pairing survived. Read-only USB diagnostics confirmed actual PWM duty and render counters:
+
+- A burst of input/approval notifications went dark 15.401 seconds after the first wake.
+- Further attention during cooldown increased unread without lighting the panel.
+- During a 13-second dark interval, received-frame time advanced and render count stayed at 12.
+- Phone → computer BLE → phone handoff retained the cooldown and delivered real event receipts
+  without a new pairing prompt. Explicit identify still woke the screen during cooldown.
+- After the full cooldown, a fresh attention event woke the panel 304.088 seconds after the
+  prior automatic wake, then timed out normally. No reboot occurred during the timed checks.
+
+Synthetic events were removed and original sound/settings and phone routing restored. The existing
+Android app was used; the newly built APK was not installed in this round. The user confirmed
+that the first short OK press after screen-off only wakes it and preserves unread, and subsequent
+short UP/DOWN presses switch between both pages. Wi-Fi, first pairing, screenshots and battery/current measurement were
+not repeated. Hardware evidence in later sections predates these changes; see [the power audit](POWER.zh_CN.md).
+
+The final 0.3.1 app image was then built and flashed at `0x10000`; esptool verified its write hash
+and the existing phone relay reported a fresh `fw: 0.3.1` device receipt. The final APK signature
+matches 0.3.0 for in-place upgrades. All 33 Python tests passed both from source and from the
+installed wheel in an isolated environment; package metadata validation passed.
+
+An additional AddressSanitizer run could not start the tests on this host: a one-second process
+sample showed a recursive ASan initialization lock during macOS dynamic-loader startup, before
+`main`. Both test processes were stopped. This is not counted as a passed sanitizer check;
+the normal native policy, alert, control and protocol executables completed successfully.
+
 ## Automated
 
 - Python collector: lifecycle filtering, independent sessions, durable outbox, deduplication,

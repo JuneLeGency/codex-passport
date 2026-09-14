@@ -2,7 +2,7 @@
 
 把 Codex 会话通知和账户用量同步到 FoloToy AI Passport，搭配 Android 手机使用。
 
-**[第一次使用？从这里一步步安装](docs/GETTING_STARTED.zh_CN.md)** · [Python / uvx 安装](docs/PYTHON.md) · [下载 APK 和固件](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0) · [English](README.md)
+**[第一次使用？从这里一步步安装](docs/GETTING_STARTED.zh_CN.md)** · [Python / uvx 安装](docs/PYTHON.md) · [下载 APK 和固件](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.1) · [English](README.md)
 
 <img src="docs/images/dashboard-example.png" alt="Passport 用量环形仪表" width="240">
 
@@ -42,15 +42,15 @@ Passport 保留原来的大 dashboard，并增加独立的紧凑用量 + 三会�
 
 | 文件 | 用途 |
 | --- | --- |
-| [Python `codex-passport-sync` 0.3.0](https://pypi.org/project/codex-passport-sync/) | 电脑采集器和中继；实际交互排序、设备设置与 Wi-Fi 配网 |
-| [Android APK 0.3.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0) | 手机伴侣；调试签名，尚未上架应用商店 |
-| [Passport 固件 0.3.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0) | 设备上的图形仪表；只烧录到官方布局的应用分区 `0x10000` |
+| [Python `codex-passport-sync` 0.3.1](https://pypi.org/project/codex-passport-sync/) | 电脑采集器和中继；实际交互排序、设备设置与 Wi-Fi 配网 |
+| [Android APK 0.3.1](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.1) | 手机伴侣；调试签名，尚未上架应用商店 |
+| [Passport 固件 0.3.1](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.1) | 设备上的图形仪表；只烧录到官方布局的应用分区 `0x10000` |
 
-从旧版升级时，请同时更新 Python 中继、APK 和 Passport 固件到 0.3.0，以启用设备设置、Wi-Fi 与新手引导；保留原状态目录和蓝牙绑定。发布页同时提供 SHA256 校验和第三方许可证。
+0.3.1 的省电策略需要更新 Passport 固件；新版 APK 补充亮屏限频说明并调整日常预设。Python 0.3.1 更新版本信息和文档，0.3.0 中继仍可配合新版固件使用。升级时保留原状态目录、设备设置和蓝牙绑定。发布页同时提供 SHA256 校验和第三方许可证。
 如果只想先查看 Python 命令，在安装 uv 后运行：
 
 ```sh
-uvx --from 'codex-passport-sync==0.3.0' codex-passport --help
+uvx --from 'codex-passport-sync==0.3.1' codex-passport --help
 ```
 
 若自定义镜像提示找不到新包，在 `uvx` 后加 `--index https://pypi.org/simple`，优先从官方 PyPI 安装；无须修改全局镜像设置。
@@ -64,8 +64,10 @@ Passport 外环是剩余额度，内环是剩余时间。橙色表示消耗领�
 
 短按上/下切换两页；长按上/下切换用量周期；亮屏时短按 OK 标记已读；长按 OK 重连并保留配对。待回复、待批准会唤醒，但不强制切页。
 
-固件 0.3.0 只为新的待回复、待批准提醒播放短提示音；普通完成、失败或中断更新列表，保持安静。亮屏时**双击 OK 切换静音**，顶部喇叭图标表示当前状态，重启保留设置。首次唤醒动作仍只唤醒。开机首次同步、重复投递、同批补送、解除静音不补响；提示音至少间隔两分钟。设备设置和 Wi-Fi 配网需要同时更新手机 App 与 Python 中继。
-熄屏后第一次按键只唤醒，不清未读。默认 60 秒无需要处理的提醒/按键后熄屏，可在手机调整。屏幕不支持触控。
+固件 0.3.1 只为新的待回复、待批准提醒播放短提示音；普通完成、失败或中断更新列表，保持安静。亮屏时**双击 OK 切换静音**，顶部喇叭图标表示当前状态，重启保留设置。首次唤醒动作仍只唤醒。开机首次同步、重复投递、同批补送、解除静音不补响；提示音至少间隔两分钟。设备设置和 Wi-Fi 配网需要同时更新手机 App 与 Python 中继。
+熄屏后第一次按键只唤醒，不清未读。主动查看默认 30 秒无按键后熄屏，可在手机调整。屏幕不支持触控。
+
+**0.3.1 省电改进：**新安装默认 35% 亮度、30 秒熄屏；待处理通知最多每 5 分钟自动亮屏一次，每次约 15 秒，连续提醒不续亮。熄屏后停止普通界面重绘，按键查看时间仍可调整，已有设置保留。亮屏时序、手机／电脑 BLE 和实体按键已验收，尚未测量续航提升。见[功耗检查与验证状态](docs/POWER.zh_CN.md)。
 
 离开电脑时，在手机“连接”页选择“使用手机转发”。电脑连接失败也会回退到手机，回退后不会反复抢连接；回到电脑旁可主动切回直连。
 外出需要你自己的 WireGuard 路由能访问电脑中继。电脑保持开机和中继运行，手机与 Passport 保持 BLE 可达。
@@ -79,7 +81,7 @@ Wi-Fi 是可选直连方式：先通过手机完成 BLE 配对，再到「设备
 Hooks 安装后需要重新打开已有 Codex 会话；增量日志是兼容性补偿，格式不是稳定 API。
 本项目没有接入 Codex Mobile 私有推送服务，不保证逐项等价。其他电脑的会话需在对应主机采集。
 
-0.3.0 会通过已配对的加密 BLE 传递最多三个会话的短标题与进展摘要，内容可能涉及隐私。只给自己的手机配置专用密钥。设备内置开源 CJK 字库，支持空格和常用中文；未覆盖的 emoji/罕见字符在设备上省略，不显示方框。完整对话和原始命令不转发，常见凭据模式会脱敏，但不要因此把中继或摘要公开。
+0.3.1 会通过已配对的加密 BLE 传递最多三个会话的短标题与进展摘要，内容可能涉及隐私。只给自己的手机配置专用密钥。设备内置开源 CJK 字库，支持空格和常用中文；未覆盖的 emoji/罕见字符在设备上省略，不显示方框。完整对话和原始命令不转发，常见凭据模式会脱敏，但不要因此把中继或摘要公开。
 HTTP 中继仅供私有网络/VPN 使用，不直接暴露公网。原始 Flash 备份、状态目录和密钥不属于开源发布内容。
 
 电脑直连、手机转发、切换补送和实体按键已通过验收；外网 WireGuard 按本次发布范围未做实测，未测量电流与续航。

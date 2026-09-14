@@ -1,7 +1,7 @@
 # Build and development
 
 End users can use the [step-by-step guide](GETTING_STARTED.zh_CN.md) and download the APK/firmware.
-This page is for rebuilding them. Version 0.3.0 adds quiet alerts, device settings, Wi-Fi handoff, onboarding and interaction ordering; update all three components together.
+This page is for rebuilding them. Version 0.3.1 adds bounded notification wakeups and defers normal rendering while dark. Android updates presets and guidance; Python updates metadata/documentation and remains protocol-compatible with 0.3.0.
 
 ## Python
 
@@ -9,7 +9,7 @@ This page is for rebuilding them. Version 0.3.0 adds quiet alerts, device settin
 uv sync --extra ble
 uv run python -m unittest discover -s tests -v
 uv build --no-sources
-uvx --from ./dist/codex_passport_sync-0.3.0-py3-none-any.whl codex-passport --help
+uvx --from ./dist/codex_passport_sync-0.3.1-py3-none-any.whl codex-passport --help
 ```
 
 Python 3.10+. Tests require local socket access. `src/`, CLI commands and protocol are independently authored.
@@ -27,7 +27,7 @@ gradle -p android --no-daemon assembleDebug
 ```
 
 Output: `android/app/build/outputs/apk/debug/app-debug.apk`. Package: `dev.passport.codex`.
-The published 0.3.0 APK uses a debug signature. A locally built APK may have a different signing key and cannot necessarily replace an installed APK without uninstalling it; that would remove its saved relay settings.
+The published 0.3.1 APK uses a debug signature. A locally built APK may have a different signing key and cannot necessarily replace an installed APK without uninstalling it; that would remove its saved relay settings.
 Published APK installation does not require ADB. Developers can install to an explicitly selected device with `adb -s DEVICE install -r PATH_TO_APK`.
 
 ## Firmware
@@ -53,6 +53,8 @@ cc -Wall -Wextra -Werror tests/test_controls.c firmware/main/controls.c -o /tmp/
 /tmp/passport-controls
 cc -Wall -Wextra -Werror tests/test_alert_policy.c firmware/main/alert_policy.c -o /tmp/passport-alert-policy
 /tmp/passport-alert-policy
+cc -Wall -Wextra -Werror tests/test_screen_policy.c firmware/main/screen_policy.c firmware/main/alert_policy.c firmware/main/controls.c -o /tmp/passport-screen-policy
+/tmp/passport-screen-policy
 javac -d /tmp/passport-pace android/app/src/main/java/dev/passport/codex/UsagePace.java tests/UsagePaceTest.java
 java -cp /tmp/passport-pace UsagePaceTest
 ```
@@ -60,6 +62,13 @@ java -cp /tmp/passport-pace UsagePaceTest
 `tests/test_protocol.c` additionally needs cJSON headers/library; IDF builds use its bundled cJSON component.
 GitHub Actions runs Python and native control tests. Manual physical-button acceptance and BLE delivery evidence are recorded separately in [VALIDATION.md](VALIDATION.md).
 USB screenshot tooling is in `scripts/capture_device.py`; it requires an explicit `--port`. Use `--fixture synthetic.json --page 0` or `--page 1` to render and capture a synthetic snapshot on one USB connection. The diagnostic page selection is temporary and does not mark notifications read. USB capture streams a full refresh from the existing 20-line display buffer using LVGL flush events, without allocating another framebuffer or interrupting the radio. Capture errors are reported instead of silently generating partial images. Use synthetic data before sharing screenshots.
+
+Firmware 0.3.1 also accepts `POWER\n` over the USB console. It returns a JSON `power`
+object containing monotonic milliseconds, `dark`, actual LEDC `pwm` duty, application `renders`,
+`received_ms`, `notice_ms` and an unread count. This command never lights the backlight or forces a
+render; it contains no session text or provisioning credentials. Keep one serial connection open
+through a timed test: opening/closing USB serial can reset this board. Sampling diagnostics wakes
+the application task, so it is suitable for functional checks, not an uninstrumented current measurement.
 
 ## Release procedure
 

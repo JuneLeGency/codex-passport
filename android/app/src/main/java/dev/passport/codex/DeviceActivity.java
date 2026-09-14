@@ -42,12 +42,13 @@ public class DeviceActivity extends AppCompatActivity {
         audio.addView(ui.text("仅等待回复或需要批准时响，至少间隔两分钟。普通完成只更新列表，不反复亮屏。静音后，待处理颜色和未读标记仍会保留。",14,false));ui.gap(audio,16);
         volume=slider(audio,"提示音音量",current.optInt("volume",65),20,80,5,"%");
         LinearLayout display=ui.card(content,false);display.addView(ui.text("舒适的屏幕",22,true));ui.gap(display,16);
-        brightness=slider(display,"屏幕亮度",current.optInt("brightness",55),10,80,5,"%");
-        idle=slider(display,"自动熄屏",current.optInt("idle",60),15,120,15," 秒");
+        brightness=slider(display,"屏幕亮度",current.optInt("brightness",35),10,80,5,"%");
+        idle=slider(display,"自动熄屏",current.optInt("idle",30),15,120,15," 秒");
+        display.addView(ui.text("固件 0.3.1 起：待回复或待批准最多每 5 分钟自动亮屏一次，每次 15 秒；连续提醒不会延长亮屏。按键查看使用上面设定的时间，静音仍保留视觉提醒。",14,false));ui.gap(display,10);
         display.addView(ui.text("电量不超过 10% 时，背光最多 20%，亮屏最多 30 秒。首次按键只唤醒，之后再操作。",14,false));
         LinearLayout presets=ui.row();
         MaterialButton quiet=new MaterialButton(this);quiet.setText("安静阅读");quiet.setOnClickListener(v->{sound.setChecked(false);volume.setValue(35);brightness.setValue(25);idle.setValue(30);});presets.addView(quiet,new LinearLayout.LayoutParams(0,ui.dp(52),1));
-        MaterialButton daily=new MaterialButton(this);daily.setText("日常使用");daily.setOnClickListener(v->{sound.setChecked(true);volume.setValue(50);brightness.setValue(55);idle.setValue(60);});presets.addView(daily,new LinearLayout.LayoutParams(0,ui.dp(52),1));content.addView(presets);ui.gap(content,14);
+        MaterialButton daily=new MaterialButton(this);daily.setText("日常使用");daily.setOnClickListener(v->{sound.setChecked(true);volume.setValue(50);brightness.setValue(35);idle.setValue(30);});presets.addView(daily,new LinearLayout.LayoutParams(0,ui.dp(52),1));content.addView(presets);ui.gap(content,14);
         receipt=ui.text("调整后点击应用，收到设备回执才会确认保存。",14,false);receipt.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);content.addView(receipt);ui.gap(content,14);
         apply=ui.button(content,"应用到 Passport",true,v->{try{send(new JSONObject().put("op","settings").put("brightness",Math.round(brightness.getValue())).put("idle",Math.round(idle.getValue())).put("volume",Math.round(volume.getValue())).put("muted",!sound.isChecked()));}catch(Exception ignored){}});
         find=ui.button(content,"找一下 Passport",false,v->{try{send(new JSONObject().put("op","identify"));}catch(Exception ignored){}});

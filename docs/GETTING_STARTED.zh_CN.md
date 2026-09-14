@@ -60,11 +60,11 @@ uv run codex-passport --help
 
 ## 3. 给 Passport 安装固件（只做一次）
 
-已经安装 0.3.0 固件时可跳到第 4 步。从旧版升级时，请同时更新固件、APK 和 Python 中继，才能使用设备设置、Wi-Fi 和新排序。
+已经安装 0.3.1 固件时可跳到第 4 步。从 0.3.0 升级时，新亮屏策略需要更新固件，APK 更新预设和说明；已有 0.3.0 中继仍兼容。更早版本建议同时更新三个组件，保留设置和配对。
 
-打开 [设备文件下载页 v0.3.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0)，在 Assets 下载：
+打开 [设备文件下载页 v0.3.1](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.1)，在 Assets 下载：
 
-- `codex-passport-0.3.0.bin`：Passport 应用固件。
+- `codex-passport-0.3.1.bin`：Passport 应用固件。
 - `SHA256SUMS`：文件校验值。
 - `THIRD_PARTY_NOTICES.txt`：随二进制保留的第三方许可证。
 
@@ -78,7 +78,7 @@ uv run python -m serial.tools.list_ports -v
 
 ```sh
 export PASSPORT_PORT="替换为刚找到的完整串口路径"
-shasum -a 256 downloads/codex-passport-0.3.0.bin
+shasum -a 256 downloads/codex-passport-0.3.1.bin
 ```
 
 输出开头的哈希应与 `SHA256SUMS` 中对应 `.bin` 一行完全一致。不一致时重新下载，不要烧录。
@@ -94,7 +94,7 @@ uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_P
 备份成功后，只写应用分区：
 
 ```sh
-uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_PORT" write-flash 0x10000 downloads/codex-passport-0.3.0.bin
+uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_PORT" write-flash 0x10000 downloads/codex-passport-0.3.1.bin
 ```
 
 预期：工具完成写入和校验，设备重启后出现圆环仪表。还没连接中继时用量暂不可用，这是正常的。
@@ -103,7 +103,7 @@ uv run --no-project --with 'esptool>=5,<6' python -m esptool --port "$PASSPORT_P
 
 ## 4. 在手机安装 App
 
-用**手机浏览器**打开同一个 [v0.3.0 下载页](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0)，下载 `codex-passport-0.3.0.apk` 并点击安装。
+用**手机浏览器**打开同一个 [v0.3.1 下载页](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.1)，下载 `codex-passport-0.3.1.apk` 并点击安装。
 按 Android 的提示，给当前浏览器/文件管理器允许“安装未知应用”。这是本项目的调试签名 APK，尚未上架应用商店。
 不需要开启开发者模式、USB 调试或无线 ADB。
 
@@ -184,13 +184,13 @@ uv run codex-passport --state-dir .runtime/live events
 | 熄屏后第一次按键 | 只唤醒；不换页、不清未读 |
 | 亮屏时长按 OK 约 2 秒再松开 | Wi-Fi 模式先返回 BLE；BLE 模式重连并保留绑定，正常不需重新输入验证码 |
 
-**固件 0.3.0 的声音提醒：**只有新的未读待回复、待批准事件会发出约 0.26 秒短提示音。普通完成、失败或中断只更新列表，不反复亮屏。亮屏时双击 OK 切换静音，顶部显示喇叭/静音图标；不会标为已读，重启后保留设置。
+**固件 0.3.1 的声音提醒：**只有新的未读待回复、待批准事件会发出约 0.26 秒短提示音。普通完成、失败或中断只更新列表，不反复亮屏。亮屏时双击 OK 切换静音，顶部显示喇叭/静音图标；不会标为已读，重启后保留设置。
 
 开机后第一次同步只恢复画面，不补响历史提醒。正常重连不会重响已收到的事件，同批补送合并为一次，提示音至少间隔两分钟；静音期间的提醒不会在解除静音后补响。任务开始、额度刷新仍不发声。
 
 进展页只展示当前状态：进行中、待回复、待批准、已完成等，不提供任务操作或详情菜单。内容按会话合并，最多三条；长文本省略。中继按最后一次实际交互倒序排列，发言、新回复或明确的输入/批准请求会让对应会话前移；后台工具和状态刷新不会影响排序。手机采用相同规则。新进展不会强制切换你正在看的页面。
 
-屏幕不是触屏，不能点击圆环或图标。默认 60 秒没有待处理提醒/按键会熄屏；只是数据刷新不会一直唤醒它。
+屏幕不是触屏，不能点击圆环或图标。0.3.1 首次使用默认 35% 亮度、30 秒无按键后熄屏，已保存的设置保留。待回复、待批准通知自动亮屏约 15 秒，两次至少间隔 5 分钟；连续提醒不延长查看时间，冷却期内提醒不补亮。普通数据刷新不唤醒。详见[省电策略与验证状态](POWER.zh_CN.md)。
 例如周期过去一半，额度已用 70%，就比匀速预算快 20 个百分点；颜色反映当前进度，不预测未来用量。
 周期刚开始的前 1% 时间暂不判断快慢。
 
@@ -290,6 +290,7 @@ WireGuard 的握手成功不等于已经配置了到电脑局域网的路由。�
 | 只有用量，没有开始提醒 | 开始事件本来就静默；用真实完成或待回复事件验证 |
 | 额度不可用 | 可能接口未返回、窗口已过期或超过 180 秒未更新；检查电脑日志，不代表额度已用光 |
 | 熄屏后 OK 没有清未读 | 第一次只唤醒；屏幕亮起后再短按一次 |
+| 想立即熄屏 | 目前没有主动熄屏按键；可在手机「设备 → 自动熄屏」设为最短 15 秒，应用后停止操作等待熄屏 |
 | 完成任务没有声音 | 完成只更新列表；待回复/待批准才短响，至少间隔两分钟；也检查顶部静音图标 |
 | Wi-Fi 显示保存成功但未联网 | 等待实际同步回执；检查 2.4GHz、密码、电脑中继地址及防火墙；失败会回 BLE |
 | 外网 WireGuard 已连接仍失败 | 检查到电脑中继地址的隧道路由、防火墙和回程路由，不能只看 VPN 开关 |

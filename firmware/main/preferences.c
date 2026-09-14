@@ -1,6 +1,6 @@
 #include "preferences.h"
 #include "nvs.h"
-static unsigned brightness=55,idle=60;
+static unsigned brightness=35,idle=30;
 void passport_preferences_init(void)
 {
     nvs_handle_t prefs;

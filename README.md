@@ -31,8 +31,8 @@ Other computers need their own collectors.
 The [beginner guide](https://github.com/JuneLeGency/codex-passport/blob/main/docs/GETTING_STARTED.zh_CN.md) covers tool installation, backup/app-only flashing, APK installation without ADB, relay configuration, pairing, a real notification test, startup, switching, troubleshooting and removal.
 It uses the verified macOS + Android + Passport setup. Linux host deployment needs platform adaptation; Windows host deployment has not been validated.
 
-Download the ready-made [Android APK and Passport firmware v0.3.0](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0).
-Upgrade the Python relay, Android APK and Passport firmware together to 0.3.0 to enable device settings and Wi-Fi provisioning. Existing BLE bonds and relay settings are retained.
+Download the ready-made [Android APK and Passport firmware v0.3.1](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.1).
+Version 0.3.1 reduces unnecessary screen-on time and background rendering. Update the firmware for the new wake policy and the APK for the revised presets and guidance. Python 0.3.1 refreshes version metadata and documentation; the 0.3.0 relay remains compatible. Existing BLE bonds and saved settings are retained.
 The APK is debug-signed. Back up the device before flashing and write **only the app at 0x10000 on the documented hardware layout**, preserving its other partitions.
 
 ## Python installation
@@ -40,7 +40,7 @@ The APK is debug-signed. Back up the device before flashing and write **only the
 Requires Python 3.10+ and a working, logged-in Codex CLI. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then try:
 
 ```sh
-uvx --from 'codex-passport-sync==0.3.0' codex-passport --help
+uvx --from 'codex-passport-sync==0.3.1' codex-passport --help
 ```
 
 If your configured mirror has not synchronized this new package, add `--index https://pypi.org/simple` to the uvx or uv tool install command to prioritize official PyPI.
@@ -48,7 +48,7 @@ If your configured mirror has not synchronized this new package, add `--index ht
 For persistent hooks, install a persistent tool environment instead:
 
 ```sh
-uv tool install 'codex-passport-sync[ble]==0.3.0'
+uv tool install 'codex-passport-sync[ble]==0.3.1'
 uv tool update-shell
 ```
 
@@ -68,7 +68,7 @@ Add `--ble "Passport-XXXXXX"` using your device's actual advertised name for com
 The `[ble]` extra is required for this route. Select the sender on Android's Connection page; a failed computer connection falls back to the phone and stays there until selected again.
 Do not install permanent hooks from a temporary uvx environment, whose cache can be removed.
 
-[PyPI package](https://pypi.org/project/codex-passport-sync/) · [Wheel downloads](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.0) · [All installation options and state paths](https://github.com/JuneLeGency/codex-passport/blob/main/docs/PYTHON.md)
+[PyPI package](https://pypi.org/project/codex-passport-sync/) · [Wheel downloads](https://github.com/JuneLeGency/codex-passport/releases/tag/v0.3.1) · [All installation options and state paths](https://github.com/JuneLeGency/codex-passport/blob/main/docs/PYTHON.md)
 
 ## Daily controls and scope
 
@@ -81,9 +81,11 @@ Do not install permanent hooks from a temporary uvx environment, whose cache can
 | Double OK while awake | Toggle persistent mute, retaining unread notifications |
 | Hold OK while awake | Leave Wi-Fi or reconnect BLE, preserving bonds |
 
-Firmware 0.3.0 adds a short chime only for new unread input/approval requests and **double OK while awake** to toggle mute (saved across restarts; speaker icon at the top). The first wake gesture still only wakes. Initial synchronization is silent; retries, already received batches and unmuting do not replay sounds. Chimes are at least two minutes apart; ordinary completions, failures and interruptions update silently without waking the screen. Update the relay, APK and firmware together to use device settings and Wi-Fi provisioning.
+Firmware supports a short chime only for new unread input/approval requests and **double OK while awake** to toggle mute (saved across restarts; speaker icon at the top). The first wake gesture still only wakes. Initial synchronization is silent; retries, already received batches and unmuting do not replay sounds. Chimes are at least two minutes apart; ordinary completions, failures and interruptions update silently without waking the screen.
 
-The backlight sleeps after 60 seconds by default; brightness, timeout, volume and mute are adjustable on Android’s Device page. At 10% battery or below, brightness is capped at 20% and screen-on time at 30 seconds. Device receipts confirm settings. Encrypted BLE frames now include up to three bounded session titles and summaries. Unsupported emoji/rare glyphs are omitted on the device; spaces, Latin and basic CJK characters use a bundled OFL font.
+The backlight sleeps after 30 seconds by default; brightness, timeout, volume and mute are adjustable on Android’s Device page. At 10% battery or below, brightness is capped at 20% and screen-on time at 30 seconds. Device receipts confirm settings. Encrypted BLE frames include up to three bounded session titles and summaries. Unsupported emoji/rare glyphs are omitted on the device; spaces, Latin and basic CJK characters use a bundled OFL font.
+
+**0.3.1** defaults to 35% brightness and a 30-second timeout for fresh settings. New attention notifications can wake a dark screen for about 15 seconds, at most once every five minutes; bursts never extend viewing. Normal rendering is deferred while dark, while synchronization and unread state continue. Saved preferences remain intact. The wake policy passed automated on-device timing and phone/computer BLE checks; the user verified wake-only OK and page switching. Battery savings have not been measured. See the [power audit (Chinese)](docs/POWER.zh_CN.md).
 An authenticated private relay and paired BLE protect access; bounded phone summaries can still contain private context.
 Keep the relay within your private network/VPN. Do not expose its HTTP port publicly. The computer must stay awake and run the collector.
 
